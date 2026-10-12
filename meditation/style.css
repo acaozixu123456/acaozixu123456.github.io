@@ -360,28 +360,60 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
 /* ---------- 小猫 ---------- */
 
 :root {
-  --fur: #f0b47a;
-  --fur-dark: #d98f4f;
-  --fur-light: #fff1df;
-  --cat-ink: #4e3a2c;
-  --cat-pink: #f29c9c;
+  /* 拿铁：暖棕虎斑，近黑色条纹，白下巴白肚皮，浅奶茶色嘴套 */
+  --fur-hi: #c9ab84;
+  --fur: #a68a64;
+  --fur-lo: #6b5640;
+  --body-hi: #b99d78;
+  --body: #8c7456;
+  --body-lo: #43362a;
+  --fur-dark: #6b5640;
+  --stripe: #211913;
+  --fur-light: #fbf7f1;
+  --white-hi: #ffffff;
+  --white-lo: #dcd0c2;
+  --muzzle: #dcb48a;
+  --muzzle-lo: #e2c19c;
+  --bridge: #cf9a64;
+  --eye-top: #5f7028;
+  --eye-mid: #9eab45;
+  --eye-bot: #ecd774;
+  --cat-ink: #2a1f19;
+  --cat-pink: #ef9f9a;
+  --nose: #d4837a;
+  --nose-ink: #6e3f33;
+  --mouth: #4e3327;
+  --dots: #7a5a44;
+  --whisker: #ffffff;
+  --rim: #cfe0ff;
+  --collar: #7a4a2c;
+  --collar-hi: #a46a43;
+  --collar-lo: #5a341e;
+  --collar-text: #f3e3c8;
 }
 .cat-host { display: grid; place-items: center; }
 .cat { width: 100%; height: auto; overflow: visible; }
-.cat .fur { fill: var(--fur); }
-.cat .light, .cat .belly { fill: var(--fur-light); }
-.cat .inner { fill: var(--cat-pink); opacity: .55; }
-.cat .stripe { stroke: var(--fur-dark); stroke-width: 4; stroke-linecap: round; fill: none; }
-.cat .tail path { fill: none; stroke: var(--fur); stroke-width: 14; stroke-linecap: round; }
-.cat .toe { stroke: var(--fur-dark); stroke-width: 1.5; stroke-linecap: round; opacity: .5; }
-.cat .blush { fill: var(--cat-pink); opacity: .45; }
-.cat .eyes path { fill: none; stroke: var(--cat-ink); stroke-width: 3.2; stroke-linecap: round; }
-.cat .pupil { fill: var(--cat-ink); }
+.cat .light { fill: var(--fur-light); }
+.cat .inner { fill: var(--cat-pink); opacity: .85; }
+.cat .tuft { stroke: #fff; stroke-width: 1.3; stroke-linecap: round; opacity: .7; }
+.cat .stripe-f { fill: var(--stripe); opacity: .92; }
+.cat .rim { fill: none; stroke-width: 3.5; }
+.cat .tail path { fill: none; stroke-width: 15; }
+.cat .tail .tail-base { stroke: var(--fur); stroke-linecap: round; }
+.cat .tail .tail-ring { stroke: var(--stripe); stroke-dasharray: 7 8; stroke-dashoffset: -6; opacity: .92; }
+.cat .tail .tail-tip { stroke: var(--stripe); stroke-linecap: round; stroke-dasharray: 13 200; }
+.cat .toe { stroke: var(--white-lo); stroke-width: 1.3; stroke-linecap: round; }
+.cat .blush { opacity: .75; transition: opacity .3s; }
+.cat .eyes path { fill: none; stroke: var(--cat-ink); stroke-width: 3; stroke-linecap: round; }
+.cat .pupil { fill: #17110e; }
 .cat .shine { fill: #fff; }
-.cat .nose { fill: var(--cat-pink); stroke: var(--cat-pink); stroke-width: 2; stroke-linejoin: round; }
-.cat .mouth { fill: none; stroke: var(--cat-ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.cat .whisker { stroke: var(--cat-ink); stroke-width: 1.2; stroke-linecap: round; opacity: .35; }
-.cat .shadow { fill: #000; opacity: .1; }
+.cat .eye-ring { fill: none; stroke: var(--cat-ink); stroke-width: 2; }
+.cat .nose { fill: var(--nose); stroke: var(--nose-ink); stroke-width: 1.6; stroke-linejoin: round; }
+.cat .nose-shine { fill: #fff; opacity: .7; }
+.cat .mouth { fill: none; stroke: var(--mouth); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.cat .dots { stroke: var(--dots); stroke-width: 1.4; stroke-linecap: round; opacity: .6; }
+.cat .whisker { fill: none; stroke: var(--whisker); stroke-width: 1.1; stroke-linecap: round; opacity: .6; }
+.cat .shadow { fill: #000; opacity: .18; }
 .cat .ball { transform-origin: 40px 182px; }
 .cat .yarn .ball circle { fill: #b9a3d8; }
 .cat .yarn .ball path, .cat .yarn .thread { fill: none; stroke: #8f78b4; stroke-width: 1.6; stroke-linecap: round; }
@@ -390,10 +422,10 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
 
 /* 平静：呼吸、摇尾巴、偶尔抖耳朵 */
 .cat .body-g { transform-origin: 100px 192px; animation: cat-breathe 5s ease-in-out infinite; }
-.cat .head { transform-origin: 100px 116px; animation: cat-bob 5s ease-in-out infinite; transition: transform .5s ease; }
-.cat .tail { transform-origin: 140px 178px; animation: cat-tail 7s ease-in-out infinite; }
-.cat .ear-r { transform-origin: 128px 58px; animation: cat-ear 11s ease-in-out infinite; }
-.cat .ear-l { transform-origin: 72px 58px; animation: cat-ear-l 17s ease-in-out infinite; }
+.cat .head { transform-origin: 100px 130px; animation: cat-bob 5s ease-in-out infinite; transition: transform .5s ease; }
+.cat .tail { transform-origin: 140px 184px; animation: cat-tail 7s ease-in-out infinite; }
+.cat .ear-r { transform-origin: 136px 56px; animation: cat-ear 11s ease-in-out infinite; }
+.cat .ear-l { transform-origin: 64px 56px; animation: cat-ear-l 17s ease-in-out infinite; }
 @keyframes cat-breathe { 50% { transform: scale(1.03, 1.045); } }
 @keyframes cat-bob { 50% { transform: translateY(-2px); } }
 @keyframes cat-tail { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(9deg); } }
@@ -401,7 +433,7 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
 @keyframes cat-ear-l { 0%, 93%, 100% { transform: rotate(0); } 95% { transform: rotate(-10deg); } 97% { transform: rotate(3deg); } }
 
 /* 眼睛：默认闭眼；醒着或捣蛋时睁开 */
-.cat .eyes, .cat .eyes-open { transition: opacity .25s ease, transform .25s ease; transform-origin: 100px 79px; }
+.cat .eyes, .cat .eyes-open { transition: opacity .25s ease, transform .25s ease; transform-origin: 100px 93px; }
 .cat .eyes-open { opacity: 0; transform: scaleY(.1); }
 .cat .eyes-happy { opacity: 0; }
 .awake .cat .eyes-open, .mischief .cat .eyes-open { opacity: 1; transform: none; }
@@ -412,7 +444,7 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
 .messy .cat .ball { transform: translateX(-6px) rotate(-40deg); }
 
 .cat .yarn, .cat .bubble { opacity: 0; }
-.cat .bubble { transform-origin: 164px 50px; transform: scale(.3); transition: opacity .3s, transform .4s cubic-bezier(.3, 1.6, .5, 1); }
+.cat .bubble { transform-origin: 174px 52px; transform: scale(.3); transition: opacity .3s, transform .4s cubic-bezier(.3, 1.6, .5, 1); }
 .mischief .cat .bubble { opacity: 1; transform: none; }
 
 /* 捣蛋一：歪头看你 */
@@ -461,11 +493,12 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
 
 /* ---------- 小猫第二版：更多细节和动作 ---------- */
 
-.cat .tail-tip { fill: none; stroke: var(--fur-dark); stroke-width: 15; stroke-linecap: round; opacity: .5; }
-.cat .collar { fill: none; stroke: #ee8ea0; stroke-width: 6; stroke-linecap: round; }
-.cat .bell circle { fill: #f5c84c; }
-.cat .bell path { stroke: #c79a2a; stroke-width: 1.4; stroke-linecap: round; }
-.cat .mouth-open { opacity: 0; transform-origin: 100px 101px; transform: scaleY(0); }
+.cat .collar path { fill: none; stroke-linecap: round; }
+.cat .collar .band { stroke: var(--collar); stroke-width: 11; }
+.cat .collar .band-hi { stroke: var(--collar-hi); stroke-width: 1.4; opacity: .8; }
+.cat .collar .band-lo { stroke: var(--collar-lo); stroke-width: 1.2; opacity: .8; }
+.cat .collar .tag { font: 600 7.6px -apple-system, "PingFang SC", "Noto Sans SC", sans-serif; letter-spacing: 1.2px; fill: var(--collar-text); }
+.cat .mouth-open { opacity: 0; transform-origin: 100px 109px; transform: scaleY(0); }
 .cat .mouth-open ellipse { fill: #7a3f3f; }
 .cat .mouth-open .tongue { fill: #f29c9c; }
 .cat .look { transform: translate(var(--lx, 0), var(--ly, 0)); transition: transform .35s cubic-bezier(.3, .8, .4, 1); }
@@ -513,7 +546,7 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
 /* 被摸：眯眼笑、冒爱心、开心地扭一扭 */
 .love .cat .eyes-open { opacity: 0; transform: scaleY(.1); }
 .love .cat .eyes-happy { opacity: 1; }
-.love .cat .blush { opacity: .8; transition: opacity .3s; }
+.love .cat .blush { opacity: 1; }
 .love .cat .hopper { transform-origin: 100px 195px; animation: cat-wiggle 1.8s ease-in-out; }
 .love .cat .hearts .h1 { animation: heart-up 1.6s ease-out; }
 .love .cat .hearts .h2 { animation: heart-up 1.6s ease-out .25s; }
@@ -587,7 +620,7 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
 .wear-scarf .cat .acc-scarf,
 .wear-glasses .cat .acc-glasses,
 .wear-beanie .cat .acc-beanie { display: inline; }
-.wear-scarf .cat .collar, .wear-scarf .cat .bell { display: none; }
+.wear-scarf .cat .collar { display: none; }
 .wear-cushion .cat .shadow { display: none; }
 
 .cat .cushion-base { fill: #7d6aa8; }
@@ -606,10 +639,21 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
 .cat .bow-knot { fill: #d95f78; }
 
 /* 毛色：换几个颜色变量就行 */
-.wear-coat-cream { --fur: #f6e6cf; --fur-dark: #e2c9a6; --fur-light: #fffaf2; }
-.wear-coat-grey { --fur: #aeb4bf; --fur-dark: #8a909c; --fur-light: #eef0f3; }
-.wear-coat-black { --fur: #3d3d47; --fur-dark: #26262c; --fur-light: #4a4a54; --cat-ink: #f0d58a; }
-.wear-coat-black .cat .pupil { fill: #e9c75e; }
+.wear-coat-cream {
+  --fur-hi: #fbf1e2; --fur: #f0dcc0; --fur-lo: #cfb38e; --body-hi: #f6e8d4; --body: #e8d1b2; --body-lo: #b99b74;
+  --fur-dark: #cfb38e; --stripe: #c9a57a; --muzzle: #f6e6d0; --muzzle-lo: #f8ecdc; --bridge: #e8c49a;
+}
+.wear-coat-grey {
+  --fur-hi: #ccd1d9; --fur: #a7adb8; --fur-lo: #6e7480; --body-hi: #bfc4cd; --body: #959ba6; --body-lo: #4f545e;
+  --fur-dark: #6e7480; --stripe: #3e424b; --muzzle: #e4e6ea; --muzzle-lo: #eceef1; --bridge: #bcc1c9;
+}
+.wear-coat-black {
+  --fur-hi: #55555f; --fur: #3b3b45; --fur-lo: #23232a; --body-hi: #4c4c56; --body: #34343d; --body-lo: #1c1c22;
+  --fur-dark: #26262c; --stripe: #18181d; --fur-light: #4a4a54; --white-hi: #5a5a64; --white-lo: #33333b;
+  --muzzle: #4c4c56; --muzzle-lo: #45454f; --bridge: #3b3b45; --dots: #22222a;
+  --eye-top: #9a6f12; --eye-mid: #d9ad3c; --eye-bot: #f6e08e; --cat-ink: #f0d58a; --mouth: #d8c9a8;
+  --rim: #e6ecff;
+}
 .wear-coat-black .cat .whisker { stroke: #d8d8de; }
 .wear-coat-black .cat .toe { stroke: #8a8a96; }
 
@@ -626,7 +670,6 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
 .lonely .cat .look { translate: 0 2.5px; }
 .lonely .cat .tail { animation-duration: 14s; }
 .lonely:not(.mischief) .cat .bubble { opacity: 1; transform: none; }
-.wear-coat-black .cat .hopper { filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, .4)); }
 
 /* ---------- 宇宙背景（space.js） ---------- */
 
@@ -705,7 +748,8 @@ body.space-on .screen { text-shadow: 0 1px 10px rgba(0, 0, 0, .35); }
 
 .cat .legs, .cat .thighs { display: none; }
 .lotus-mode .cat .legs, .lotus-mode .cat .thighs { display: inline; }
-.cat .limb { fill: none; stroke: var(--fur); stroke-width: 21; stroke-linecap: round; stroke-linejoin: round; }
+.cat .limb { fill: none; stroke: var(--body); stroke-width: 21; stroke-linecap: round; stroke-linejoin: round; }
+.cat .limb-ring { fill: none; stroke: var(--stripe); stroke-width: 21; stroke-dasharray: 5 8; stroke-dashoffset: -4; opacity: .85; }
 .cat .leg .crease { fill: none; stroke: var(--fur-dark); stroke-width: 2; stroke-linecap: round; }
 .cat .foot .pad { fill: var(--cat-pink); }
 .lotus-mode .cat .poser { transform-origin: 100px 190px; }
