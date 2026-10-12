@@ -341,6 +341,45 @@ function catPose(host, s) {
   }
 }
 
+/* ---------- 步行：站着一步一步走（正面看过去，原地迈步） ---------- */
+
+// side：迈哪条腿（0 左 1 右）；u：这一步走到哪了 0→1；amp：步子大小（0 站定）
+function catStep(host, side, u, amp = 1) {
+  const svg = host.querySelector('.cat');
+  if (!svg) return;
+  const p = Math.min(1, Math.max(0, u));
+  const arc = Math.sin(Math.PI * p);              // 抬脚的高度：中间最高
+  const land = Math.max(0, Math.sin(Math.PI * Math.min(1, Math.max(0, (p - 0.78) / 0.22)))); // 落地那一下
+  const dir = side ? -1 : 1;                       // 身体往支撑腿那边歪
+  const bob = arc * 2.2 * amp - land * 1.2 * amp;
+  const sway = dir * arc * 3.2 * amp;
+  svg.querySelector('.poser').style.transform =
+    `translateY(${(-SIT_LIFT - bob).toFixed(2)}px) rotate(${sway.toFixed(2)}deg) scale(${(1 + land * .012 * amp).toFixed(4)}, ${(1 - land * .02 * amp).toFixed(4)})`;
+  const f = v => v.toFixed(1);
+  for (const [s, flip] of [['l', false], ['r', true]]) {
+    const moving = (s === 'r') === !!side;
+    const k = moving ? arc * amp : 0;
+    const hip = legAt('hip', 0, flip), knee = legAt('knee', 0, flip), foot = legAt('foot', 0, flip);
+    const out = flip ? 1 : -1;
+    knee[0] += out * k * 3.5; knee[1] += SIT_LIFT - k * 7;
+    foot[0] += out * k * 1.2; foot[1] += SIT_LIFT - k * 12;
+    svg.querySelector('.thigh-' + s).setAttribute('d', `M${f(hip[0])} ${f(hip[1])} L${f(knee[0])} ${f(knee[1])}`);
+    const leg = svg.querySelector('.leg-' + s);
+    const shin = `M${f(knee[0])} ${f(knee[1])} L${f(foot[0])} ${f(foot[1])}`;
+    leg.querySelector('.limb').setAttribute('d', shin);
+    leg.querySelector('.limb-ring').setAttribute('d', shin);
+    leg.querySelector('.crease').style.opacity = '0';
+    // 抬起的脚掌微微翻起，露出一点肉垫
+    const foo = svg.querySelector('.foot-' + s);
+    foo.setAttribute('transform', `translate(${f(foot[0])} ${f(foot[1])}) rotate(${f(-out * k * 10)}) scale(1 ${(1 - k * .12).toFixed(3)})`);
+    foo.querySelector('.pad').style.opacity = (k * 0.7).toFixed(3);
+    foo.querySelector('.toe').style.opacity = ((1 - k) * 0.5).toFixed(3);
+  }
+  // 前爪跟着摆：和迈出的腿反着来
+  host.style.setProperty('--swl', `${f(-dir * arc * 3.5 * amp)}px`);
+  host.style.setProperty('--swr', `${f(dir * arc * 3.5 * amp)}px`);
+}
+
 /* ---------- 首页小猫：待机小动作和互动 ---------- */
 
 const homeCat = {

@@ -6,7 +6,7 @@ const LOG_KEY = 'meditation.log.v1';
 const SETTINGS_KEY = 'meditation.settings.v1';
 const DEFAULTS = {
   minutes: 10, interval: 0, prep: true, wake: true, volume: 0.7,
-  mode: 'timer', pattern: '478', sound: 'none', noiseVolume: 0.5, focus: true, theme: 'dark', cue: 'tone', bg: 'space',
+  mode: 'timer', pattern: '478', sound: 'none', noiseVolume: 0.5, focus: true, theme: 'dark', cue: 'tone', bg: 'space', pace: 'free',
 };
 const PREP_SEC = 10;
 const MIN_SAVE_SEC = 60;
@@ -514,6 +514,7 @@ const STILL_MS = 1500;     // 手机静止这么久之后再动，算新的一�
 const REPEAT_MS = 12000;   // 一直拿着玩，每隔这么久再算一次
 const LEAVE_MIN_MS = 3000; // 离开不到 3 秒不算
 const FOCUS_TEXT = { leave: '离开了 app', touch: '碰了屏幕', move: '拿起了手机' };
+const MODE_NAME = { breath: '呼吸练习', walk: '步行' };
 
 const focus = {
   on: false,
@@ -545,7 +546,8 @@ function resetFocus(now) {
 
 // iPhone 需要在点击里申请“运动与方向”权限，只问一次
 function requestMotion() {
-  if (!settings.focus || motionListening || !('DeviceMotionEvent' in window)) return;
+  // 步行要靠它计步，所以即使关了专注检测也申请
+  if ((!settings.focus && settings.mode !== 'walk') || motionListening || !('DeviceMotionEvent' in window)) return;
   const listen = () => {
     if (motionListening) return;
     motionListening = true;
@@ -570,6 +572,8 @@ function stopMotion() {
 }
 
 function onMotion(e) {
+  // 步行时手机本来就在动，不算分心，用来计步
+  if (timer.mode === 'walk') { walkMotion(e); return; }
   if (timer.phase !== 'running' || !focus.on) return;
   const a = e.acceleration;
   const r = e.rotationRate;
@@ -653,7 +657,7 @@ function renderFocus(now = Date.now()) {
 
 function focusSummary() {
   if (!focus.on) return '';
-  if (focus.count === 0) return '全程专注，没有碰手机';
+  if (focus.count === 0) return timer.mode === 'walk' ? '全程专注，没有离开 app' : '全程专注，没有碰手机';
   const parts = Object.entries(focus.kinds).filter(([, n]) => n).map(([k, n]) => `${FOCUS_TEXT[k]} ${n} 次`);
   return `分心 ${focus.count} 次：${parts.join('，')}`;
 }
@@ -727,7 +731,7 @@ function startSession() {
   timer.intervalMs = settings.interval * 60 * 1000;
   timer.elapsedBefore = 0;
   timer.startedAt = null;
-  timer.mode = settings.mode;
+  timer.mode = ['breath', 'walk'].includes(settings.mode) ? settings.mode : 'timer';
   timer.pattern = PATTERNS[settings.pattern] || PATTERNS['478'];
   timer.sound = settings.sound;
   timer.sight = rollSight(travel.here, timer.plannedMs, log);
@@ -750,10 +754,12 @@ function startSession() {
   startNoise(timer.sound, 4);
   requestWake();
   $('session').classList.toggle('breath', timer.mode === 'breath');
+  $('session').classList.toggle('walk', timer.mode === 'walk');
   document.body.classList.add('in-session');
   timer.rising = false;
   show('session');
-  startSitting(settings.prep ? 900 : 200);
+  if (timer.mode === 'walk') startWalk(now);
+  else startSitting(settings.prep ? 900 : 200);
   renderSession();
   timer.tickId = setInterval(tick, 250);
   if (timer.mode === 'breath') requestAnimationFrame(animateBreath);
@@ -793,7 +799,7 @@ function tick() {
     Space.event(p >= 0 && p <= 1 ? sg.type : 0, p, sg.seed);
     if (p >= 0.5) timer.sightSeen = true;
   }
-  if (timer.phase === 'running' && !timer.rising && timer.plannedMs >= 60000 && timer.plannedMs - elapsedMs(now) <= STAND_MS + 1200) standUp();
+  if (timer.phase === 'running' && !timer.rising && timer.mode !== 'walk' && timer.plannedMs >= 60000 && timer.plannedMs - elapsedMs(now) <= STAND_MS + 1200) standUp();
   renderSession(now);
 }
 
@@ -803,6 +809,8 @@ function togglePause() {
     timer.elapsedBefore = elapsedMs(now);
     timer.phase = 'paused';
     unschedule();
+    walk.stepStart = 0;
+    walk.queued = 0;
     if (noise) fadeTo(noise.gain, 0, 1.5);
   } else if (timer.phase === 'paused') {
     timer.phase = 'running';
@@ -854,6 +862,7 @@ function finish(completed, now = Date.now()) {
   }
   timer.phase = 'idle';
   timer.rising = false;
+  stopWalk();
   resetPose();
   Space.breath(null);
   Space.event(0);
@@ -877,7 +886,8 @@ function finish(completed, now = Date.now()) {
   const savedEntry = sec >= MIN_SAVE_SEC;
   if (savedEntry) {
     const entry = { start: timer.startedAt, sec, planned: Math.round(timer.plannedMs / 1000) };
-    if (timer.mode === 'breath') entry.mode = 'breath';
+    if (timer.mode !== 'timer') entry.mode = timer.mode;
+    if (timer.mode === 'walk' && walk.sensor) entry.steps = walk.steps;
     if (focus.on) entry.distractions = focus.count;
     entry.place = travel.here;
     if (timer.sight && timer.sightSeen) entry.sight = timer.sight.id;
@@ -898,7 +908,8 @@ function finish(completed, now = Date.now()) {
     : '';
   const s = stats();
   $('done-title').textContent = completed ? '完成' : '已结束';
-  $('done-detail').textContent = `这次${timer.mode === 'breath' ? '呼吸练习' : ''} ${formatDuration(sec)}，已连续 ${s.streak} 天`;
+  const walked = timer.mode === 'walk' ? walkSummary() : '';
+  $('done-detail').textContent = `这次${MODE_NAME[timer.mode] || ''} ${formatDuration(sec)}，${walked ? walked + '，' : ''}已连续 ${s.streak} 天`;
   $('done-travel').textContent = savedEntry ? doneTravelText(openBefore, sec) : '';
   $('done-sky').textContent = savedEntry ? doneSkyText(newEntry) : '';
   lastEntry = newEntry;
@@ -969,7 +980,7 @@ function doneTravelText(openBefore, sec) {
   const st = travelStats(log);
   const fresh = openPlaces(st).filter(id => !openBefore.includes(id));
   if (fresh.length) return `${fresh.map(id => PLACE[id].name).join('、')}已点亮，去星图看看`;
-  const here = `在${PLACE[travel.here].name}潜修 ${Math.max(1, Math.round(sec / 60))} 分钟`;
+  const here = `在${PLACE[travel.here].name}${timer.mode === 'walk' ? '漫步' : '潜修'} ${Math.max(1, Math.round(sec / 60))} 分钟`;
   const next = travelProgressText(st);
   return next ? `${here}，${next}` : here;
 }
@@ -982,7 +993,7 @@ function doneSkyText(entry) {
   const sg = SIGHT[entry.sight];
   if (sg) {
     const first = log.filter(e => e.sight === sg.id).length === 1;
-    parts.push(`潜修时，天上出现了${sg.name} ${sg.icon}${first ? '，第一次遇见，已收进图鉴' : ''}`);
+    parts.push(`${entry.mode === 'walk' ? '漫步' : '潜修'}时，天上出现了${sg.name} ${sg.icon}${first ? '，第一次遇见，已收进图鉴' : ''}`);
   }
   const ct = conText(log.length);
   if (ct) parts.push(ct);
@@ -1057,7 +1068,8 @@ function renderSession(now = Date.now()) {
   const session = $('session');
   session.classList.toggle('paused', timer.phase === 'paused');
   // 准备和暂停时小猫睁着眼看你，正式开始后闭眼
-  $('stage').classList.toggle('awake', timer.phase === 'prep' || timer.phase === 'paused' || timer.rising);
+  // 步行时一直睁着眼（迈步时眯成笑眼，见 style.css）
+  $('stage').classList.toggle('awake', timer.phase === 'prep' || timer.phase === 'paused' || timer.rising || timer.mode === 'walk');
   const breath = timer.mode === 'breath';
   let fraction;
   if (timer.phase === 'prep') {
@@ -1065,7 +1077,7 @@ function renderSession(now = Date.now()) {
     $('phase').textContent = '准备';
     $('time').textContent = String(Math.ceil(left / 1000));
     $('sub').textContent = '';
-    $('session-hint').textContent = '坐好，放松肩膀。轻点圆圈跳过';
+    $('session-hint').textContent = timer.mode === 'walk' ? '手机拿在手里或放进口袋，屏幕亮着才能计步' : '坐好，放松肩膀。轻点圆圈跳过';
     $('pause').hidden = true;
     $('stop').textContent = '取消';
     $('stop').classList.remove('armed');
@@ -1077,10 +1089,11 @@ function renderSession(now = Date.now()) {
       $('phase').textContent = paused ? '已暂停' : formatClock(left);
       $('session-hint').textContent = '';
     } else {
-      $('phase').textContent = paused ? '已暂停' : '静坐';
+      const walking = timer.mode === 'walk';
+      $('phase').textContent = paused ? '已暂停' : walking ? '步行' : '静坐';
       $('time').textContent = formatClock(left);
-      $('sub').textContent = '';
-      $('session-hint').textContent = '';
+      $('sub').textContent = walking && walk.sensor ? `${walk.steps} 步` : '';
+      $('session-hint').textContent = walking && walk.dimmed ? '轻点屏幕亮起' : '';
     }
     $('pause').hidden = false;
     $('pause').textContent = paused ? '继续' : '暂停';
@@ -1133,6 +1146,8 @@ function renderHome() {
   for (const b of $('presets').children) b.classList.toggle('on', Number(b.dataset.min) === settings.minutes);
   $('pattern-row').hidden = !breath;
   for (const b of $('patterns').children) b.classList.toggle('on', b.dataset.pattern === settings.pattern);
+  $('pace-row').hidden = settings.mode !== 'walk';
+  for (const b of $('paces').children) b.classList.toggle('on', b.dataset.pace === settings.pace);
   for (const b of $('sounds').children) b.classList.toggle('on', b.dataset.sound === settings.sound);
   const parts = [];
   if (s.streak) parts.push(`连续 ${s.streak} 天`);
@@ -1581,10 +1596,10 @@ function renderStats(now = new Date()) {
     const when = document.createElement('span');
     when.className = 'when';
     when.textContent = `${d.getMonth() + 1}月${d.getDate()}日 周${WEEKDAYS[d.getDay()]} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    if (e.mode === 'breath') {
+    if (e.mode === 'breath' || e.mode === 'walk') {
       const tag = document.createElement('span');
       tag.className = 'tag';
-      tag.textContent = '呼吸';
+      tag.textContent = e.mode === 'walk' ? '步行' : '呼吸';
       when.append(tag);
     }
     if (PLACE[e.place] && e.place !== 'moon') {
@@ -1676,7 +1691,8 @@ async function importLog(file) {
       if (known.has(start)) continue;
       known.add(start);
       const entry = { start, sec: Math.round(e.sec), planned: Math.round(e.planned || e.sec) };
-      if (e.mode === 'breath') entry.mode = 'breath';
+      if (e.mode === 'breath' || e.mode === 'walk') entry.mode = e.mode;
+      if (e.mode === 'walk' && Number.isInteger(e.steps) && e.steps >= 0) entry.steps = e.steps;
       if (Number.isInteger(e.distractions) && e.distractions >= 0) entry.distractions = e.distractions;
       if (PLACE[e.place]) entry.place = e.place;
       if (SIGHT[e.sight]) entry.sight = e.sight;
@@ -1711,6 +1727,18 @@ for (const [key, p] of Object.entries(PATTERNS)) {
 pick('mode', 'mode', v => { settings.mode = v; saveSettings(); renderHome(); });
 pick('presets', 'min', setMinutes);
 pick('patterns', 'pattern', v => { settings.pattern = v; saveSettings(); renderHome(); });
+for (const [key, p] of Object.entries(WALK_PACES)) {
+  const b = document.createElement('button');
+  b.dataset.pace = key;
+  b.textContent = p.name;
+  $('paces').append(b);
+}
+pick('paces', 'pace', v => {
+  settings.pace = v;
+  saveSettings();
+  renderHome();
+  if (WALK_PACES[v].ms) { ensureAudio(); walkTick(0); setTimeout(() => walkTick(1), WALK_PACES[v].ms); }
+});
 pick('sounds', 'sound', v => { settings.sound = v; saveSettings(); renderHome(); previewNoise(v); });
 $('minus').addEventListener('click', () => setMinutes(settings.minutes - 1));
 $('plus').addEventListener('click', () => setMinutes(settings.minutes + 1));
@@ -1767,6 +1795,8 @@ $('focus-detect').addEventListener('change', e => {
 $('session').addEventListener('pointerdown', e => {
   // 音频被打断后，借这次触摸把它唤回来
   if (ctx && ctx.state !== 'running') ctx.resume().catch(() => {});
+  // 步行时手里拿着手机，碰到屏幕不算分心；变暗时这一下只是把屏幕点亮
+  if (timer.mode === 'walk') { if (timer.phase !== 'idle' && walkTouched()) renderSession(); return; }
   if (!e.target.closest('button')) disturb('touch');
 });
 $('volume').addEventListener('input', e => {

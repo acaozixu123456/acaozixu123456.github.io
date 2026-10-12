@@ -769,7 +769,7 @@ const Space = (() => {
   let cur = null, warp = null, last = 0, lastRaf = 0, slow = 0, running = false;
   let t = 20, rt = 3, mode = SPACE_MODES.home, dim = 1, zoom = mode.zoom, breath = null;
   let shift = null, catEl = null, cat = [0, 0, 0, 1], imprint = 1, link = mode.link;
-  let stirOn = false, stirV = 0;
+  let stirOn = false, stirV = 0, dimK = 1;
   let ev = [0, 0, 0, 0], sun = [0, 0, 0, 0], mark = [0, 0, 0, 0];
   const con = new Float32Array(24);
   let conN = 0;
@@ -906,7 +906,7 @@ const Space = (() => {
     last = now;
     if (!reduce) { t = (t + dt * mode.speed) % 3600; rt = (rt + dt) % 3600; }
     const k = Math.min(1, dt * 3);
-    dim += (mode.dim - dim) * k;
+    dim += (mode.dim * dimK - dim) * (dimK < 1 ? Math.min(1, dt * 0.8) : k);
     link += (mode.link - link) * k;
     stirV = stirOn ? Math.min(1, stirV + dt * 6) : Math.max(0, stirV - dt / 8);
     const zt = cur && SCENES[cur].ground !== undefined ? mode.gzoom : mode.zoom;
@@ -978,7 +978,8 @@ const Space = (() => {
     else dctx.clearRect(0, 0, W, H);
   }
 
-  function puff(kind) {
+  // kind：sit 坐下、stand 起身、step 走路时一只脚落地（side 0 左 1 右）
+  function puff(kind, side) {
     if (!running || !catEl || reduce) return;
     const r = catEl.getBoundingClientRect();
     if (!r.width) return;
@@ -990,16 +991,17 @@ const Space = (() => {
     }
     const ground = SCENES[cur].ground !== undefined;
     const st = DUST_STYLES[ground ? cur : 'sky'] || DUST_STYLES.moon;
+    const step = kind === 'step';
     const fx = r.left + r.width / 2, fy = r.top + r.height * 192 / 210, half = r.width * 0.3;
-    const n = Math.round(st.n * (kind === 'stand' ? 0.6 : 1));
+    const n = Math.round(st.n * (kind === 'stand' ? 0.6 : step ? 0.12 : 1));
     for (let i = 0; i < n; i++) {
-      const side = Math.random() < 0.5 ? -1 : 1;
-      const x = fx + side * half * (0.4 + Math.random() * 0.75);
-      const sp = ground ? 30 + Math.random() * 90 : 6 + Math.random() * 20;
+      const sd = step ? (side ? 1 : -1) : Math.random() < 0.5 ? -1 : 1;
+      const x = step ? fx + sd * r.width * 0.075 + (Math.random() - 0.5) * r.width * 0.09 : fx + sd * half * (0.4 + Math.random() * 0.75);
+      const sp = (ground ? 30 + Math.random() * 90 : 6 + Math.random() * 20) * (step ? 0.4 : 1);
       const ang = ground ? (0.15 + Math.random() * 0.9) : Math.random() * Math.PI;
       motes.push({
         x, y: fy - Math.random() * 3, st,
-        vx: ground ? side * Math.cos(ang) * sp : Math.cos(ang) * sp,
+        vx: ground ? (step ? (Math.random() < 0.5 ? -1 : 1) : sd) * Math.cos(ang) * sp : Math.cos(ang) * sp,
         vy: ground ? -Math.sin(ang) * sp : -Math.abs(Math.sin(ang)) * sp,
         floor: fy + Math.random() * 7,
         s: 0.6 + Math.random() * (ground ? 1.7 : 1.4),
@@ -1059,6 +1061,8 @@ const Space = (() => {
     },
     breath(b) { breath = b; },
     stir(on) { stirOn = on; },
+    // 额外调暗（步行时放进口袋）
+    dimmer(v) { dimK = v; },
     // 地上被坐出的印子：0 还没坐下，1 坐实了（起身后印子保留）
     imprint(v) { imprint = v; },
     puff,

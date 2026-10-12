@@ -47,6 +47,7 @@
       <div class="segmented" id="mode" role="tablist">
         <button data-mode="timer">静坐</button>
         <button data-mode="breath">呼吸</button>
+        <button data-mode="walk">步行</button>
       </div>
 
       <div class="duration">
@@ -69,6 +70,11 @@
       <div class="option" id="pattern-row">
         <div class="option-label">节奏</div>
         <div class="pills" id="patterns"></div>
+      </div>
+
+      <div class="option" id="pace-row" hidden>
+        <div class="option-label">步伐</div>
+        <div class="pills" id="paces"></div>
       </div>
 
       <div class="option">
@@ -113,7 +119,7 @@
         <summary>这些数字怎么算的</summary>
         <p>这是根据研究文献的平均结果估算的，不是对你身体的测量，个人差异很大。</p>
         <p>数字的意思：和不练习的人比，你在这一项上大约前进了多少个百分位。比如注意力 +4.0，表示从中间水平（第 50 百分位）提高到约第 54 百分位。皮质醇和焦虑是下降，所以用负号。</p>
-        <p>算法：每次练习的分钟数按类型加权（静坐更偏注意力，呼吸更偏心率变异性），越久以前的练习权重越低（6 周减半）；效果随练习量增长但会逐渐饱和，大约每天 13 分钟坚持 8 周，接近研究里的效果。下方细线表示达到研究效果的进度。</p>
+        <p>算法：每次练习的分钟数按类型加权（静坐更偏注意力，呼吸更偏心率变异性，步行更偏缓解压力和焦虑），越久以前的练习权重越低（6 周减半）；效果随练习量增长但会逐渐饱和，大约每天 13 分钟坚持 8 周，接近研究里的效果。下方细线表示达到研究效果的进度。</p>
         <ul id="effect-sources"></ul>
       </details>
     </section>
@@ -282,6 +288,7 @@
       <div class="orb-guide" aria-hidden="true"></div>
       <div class="orb" id="orb" aria-hidden="true"></div>
       <svg class="marks" viewBox="0 0 200 200" aria-hidden="true"><g id="marks"></g></svg>
+      <div class="footfalls" aria-hidden="true"></div>
       <div class="cat-host stage-cat lotus-mode" id="stage-cat" aria-hidden="true"></div>
     </div>
     <div class="readout">
@@ -363,6 +370,7 @@
   <script src="sky.js"></script>
   <script src="ambience.js"></script>
   <script src="postcard.js"></script>
+  <script src="walk.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

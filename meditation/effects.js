@@ -17,22 +17,22 @@ const EFFECT_HALF_LIFE_DAYS = 42;
 
 const EFFECTS = [
   {
-    key: 'attention', name: '注意力', dir: 1, gMax: 0.3, w: { timer: 1, breath: 0.5 },
+    key: 'attention', name: '注意力', dir: 1, gMax: 0.3, w: { timer: 1, breath: 0.5, walk: 0.6 },
     desc: '持续注意、工作记忆',
     basis: '正念训练对注意和执行功能有小到中等的改善（Zainal & Newman 2023，111 项随机对照试验）；每天 13 分钟、8 周后注意力和工作记忆明显提高，4 周时还不明显（Basso 等 2019）。',
   },
   {
-    key: 'cortisol', name: '皮质醇', dir: -1, gMax: 0.25, w: { timer: 1, breath: 1 },
+    key: 'cortisol', name: '皮质醇', dir: -1, gMax: 0.25, w: { timer: 1, breath: 1, walk: 0.8 },
     desc: '压力激素',
     basis: '冥想能降低皮质醇，压力大的人群下降中等，健康人群效果较小（Koncz 等，34 项随机对照试验）。这里按健康人群的小效应估算。',
   },
   {
-    key: 'anxiety', name: '焦虑', dir: -1, gMax: 0.32, w: { timer: 0.8, breath: 1 },
+    key: 'anxiety', name: '焦虑', dir: -1, gMax: 0.32, w: { timer: 0.8, breath: 1, walk: 1 },
     desc: '紧张、焦虑感',
-    basis: '呼吸练习降低焦虑 g = 0.32、压力 g = 0.35（Fincham 等 2023，Scientific Reports）。',
+    basis: '呼吸练习降低焦虑 g = 0.32、压力 g = 0.35（Fincham 等 2023，Scientific Reports）。步行冥想按同样的趋势估算：正念步行几周后压力感和焦虑下降（Teut 等 2013；Prakhinkit 等 2014）。',
   },
   {
-    key: 'hrv', name: '心率变异性', dir: 1, gMax: 0.3, w: { timer: 0.3, breath: 1 },
+    key: 'hrv', name: '心率变异性', dir: 1, gMax: 0.3, w: { timer: 0.3, breath: 1, walk: 0.4 },
     desc: '放松神经（副交感）活跃度',
     basis: '慢呼吸时心率变异性（RMSSD）大幅上升，研究中约从 47 ms 升到 91 ms（Laborde 等 2022）；多次练习后静息水平也会提高（Laborde 等 2022，Neuroscience & Biobehavioral Reviews 元分析）。',
   },
@@ -50,7 +50,7 @@ function effectiveMinutes(entries, effect, now) {
   let total = 0;
   for (const e of entries) {
     const ageDays = Math.max(0, (now - new Date(e.start)) / 86400000);
-    total += (e.sec / 60) * (effect.w[e.mode === 'breath' ? 'breath' : 'timer']) * 0.5 ** (ageDays / EFFECT_HALF_LIFE_DAYS);
+    total += (e.sec / 60) * ((effect.w[e.mode] ?? effect.w.timer)) * 0.5 ** (ageDays / EFFECT_HALF_LIFE_DAYS);
   }
   return total;
 }
