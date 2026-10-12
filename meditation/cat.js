@@ -23,6 +23,19 @@ const HEAD_STRIPES = taper(100, 28, 101, 40, 100, 54, 4.6) + ' ' + stripes([
   [56, 95, 44, 93, 28, 90, 3.6], [54, 104, 44, 104, 30, 106, 3.2], [50, 114, 42, 114, 34, 118, 2.4],
 ]);
 const BODY_STRIPES = stripes([[52, 126, 64, 130, 78, 142, 6.5], [48, 144, 64, 148, 78, 162, 7.5], [48, 162, 62, 166, 76, 180, 7.5], [50, 180, 62, 184, 72, 198, 7]]);
+// 头顶翘起的几撮毛，画在轮廓后面，只露出尖
+function fluff(cx, cy, rx, ry, from, to, n, len, w) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const a = (from + (to - from) * (i + .5) / n) * Math.PI / 180;
+    const k = 1 + ((i * 37) % 7 - 3) * .06;   // 长短错落一点
+    const x = cx + Math.cos(a) * rx, y = cy - Math.sin(a) * ry;
+    const ox = Math.cos(a) * len * k, oy = -Math.sin(a) * len * k;
+    out.push(taper(x - ox * .6, y - oy * .6, x + ox * .4 - oy * .25, y + oy * .4 + ox * .25, x + ox, y + oy, w));
+  }
+  return out.join(' ');
+}
+const HEAD_FLUFF = fluff(100, 84, 64, 53.5, 78, 102, 3, 5.5, 2.4);
 // 眼睛：左眼中心 (72, 93)，右眼 (128, 93)
 const EYE = [[72, 93], [128, 93]];
 const eyes = fn => EYE.map(([x, y]) => fn(x, y)).join('');
@@ -41,12 +54,16 @@ const CAT_SVG = `
     <radialGradient id="__cap">${stop(0, '--stripe', .6)}${stop(1, '--stripe', 0)}</radialGradient>
     <linearGradient id="__iris" x1="0" y1="0" x2="0" y2="1">${stop(0, '--eye-top')}${stop(.55, '--eye-mid')}${stop(1, '--eye-bot')}</linearGradient>
     <radialGradient id="__blush">${stop(0, '--cat-pink', .85)}${stop(1, '--cat-pink', 0)}</radialGradient>
-    <linearGradient id="__rim" x1="0" y1="0" x2="1" y2="0">${stop(.6, '--rim', 0)}${stop(1, '--rim', .32)}</linearGradient>
+    <linearGradient id="__rim" class="rim-dir" x1="0" y1="0" x2="1" y2="0">${stop(.6, '--rim', 0)}<stop offset="1" style="stop-color:var(--rim);stop-opacity:var(--ra)"/></linearGradient>
+    <linearGradient id="__light" class="light-dir" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" style="stop-color:var(--key);stop-opacity:var(--ka)"/>${stop(.42, '--key', 0)}${stop(.55, '--shade', 0)}<stop offset="1" style="stop-color:var(--shade);stop-opacity:var(--sa)"/>
+    </linearGradient>
+    <radialGradient id="__ao">${stop(0, '--ao', .55)}${stop(.6, '--ao', .22)}${stop(1, '--ao', 0)}</radialGradient>
     <clipPath id="__headc"><path d="${CAT_HEAD}"/></clipPath>
     <clipPath id="__bodyc"><path d="${CAT_BODY}"/></clipPath>
     <clipPath id="__eyec">${eyes((x, y) => `<ellipse cx="${x}" cy="${y}" rx="13" ry="14.5"/>`)}</clipPath>
   </defs>
-  <ellipse class="shadow" cx="100" cy="198" rx="50" ry="6"/>
+  <ellipse class="shadow" cx="100" cy="197" rx="58" ry="8" fill="url(#__ao)"/>
   <g class="acc acc-cushion">
     <ellipse class="cushion-base" cx="100" cy="196" rx="76" ry="14"/>
     <ellipse class="cushion-top" cx="100" cy="191" rx="70" ry="10"/>
@@ -63,6 +80,7 @@ const CAT_SVG = `
       <path class="tail-base" d="${CAT_TAIL}"/>
       <path class="tail-ring" d="${CAT_TAIL}"/>
       <path class="tail-tip" d="M166 130 C 190 154, 176 192, 136 186" pathLength="100"/>
+      <path class="tail-lit" d="${CAT_TAIL}" stroke="url(#__light)"/>
     </g>
     <g class="body-g">
       <path d="${CAT_BODY}" fill="url(#__body)"/>
@@ -72,26 +90,31 @@ const CAT_SVG = `
       </g>
       <g class="thighs"><path class="limb thigh-r"/><path class="limb thigh-l"/></g>
       <path class="belly" d="M100 130 Q94 126 90 131 Q84 129 82 136 C 77 152, 78 170, 81 178 C 86 191, 114 191, 119 178 C 122 170, 123 152, 118 136 Q116 129 110 131 Q106 126 100 130 Z" fill="url(#__white)"/>
+      <path class="chest-fur" d="M93 139 q3 5 0 10 M100 135 q3 5 0 10 M107 139 q-3 5 0 10 M90 156 q2.5 4 0 8 M110 156 q-2.5 4 0 8 M100 152 q2.5 4 0 8"/>
+      <path class="lit" d="${CAT_BODY}" fill="url(#__light)"/>
       <g class="legs">
         <g class="leg leg-r"><path class="limb"/><path class="limb-ring"/><path class="crease"/></g>
         <g class="leg leg-l"><path class="limb"/><path class="limb-ring"/><path class="crease"/></g>
         <g class="foot foot-r"><ellipse class="light" rx="10.5" ry="6.5"/><ellipse class="pad" cx="-1" cy=".5" rx="3.6" ry="2.6"/><path class="toe" d="M-4 4 v-3.5 M4 4 v-3.5"/></g>
         <g class="foot foot-l"><ellipse class="light" rx="10.5" ry="6.5"/><ellipse class="pad" cx="1" cy=".5" rx="3.6" ry="2.6"/><path class="toe" d="M-4 4 v-3.5 M4 4 v-3.5"/></g>
       </g>
-      <g class="pawpos-l"><g class="paw paw-l"><ellipse cx="83" cy="190" rx="13.5" ry="8.5" fill="url(#__white)"/><path class="toe" d="M79 192.5 v-3.5 M87 192.5 v-3.5"/></g></g>
-      <g class="pawpos-r"><g class="paw paw-r"><ellipse cx="117" cy="190" rx="13.5" ry="8.5" fill="url(#__white)"/><path class="toe" d="M113 192.5 v-3.5 M121 192.5 v-3.5"/></g></g>
+      <g class="pawpos-l"><g class="paw paw-l"><ellipse cx="83" cy="190" rx="13.5" ry="8.5" fill="url(#__white)"/><ellipse class="lit" cx="83" cy="190" rx="13.5" ry="8.5" fill="url(#__light)"/><path class="toe" d="M79 192.5 v-3.5 M87 192.5 v-3.5"/></g></g>
+      <g class="pawpos-r"><g class="paw paw-r"><ellipse cx="117" cy="190" rx="13.5" ry="8.5" fill="url(#__white)"/><ellipse class="lit" cx="117" cy="190" rx="13.5" ry="8.5" fill="url(#__light)"/><path class="toe" d="M113 192.5 v-3.5 M121 192.5 v-3.5"/></g></g>
     </g>
     <g class="head">
       <g class="ear ear-l">
         <path d="M42 74 Q34 30 48 16 Q56 10 66 16 Q82 26 96 42 Z" fill="url(#__fur)"/>
         <path class="inner" d="M50 62 Q45 34 52 24 Q57 20 64 24 Q76 32 86 44 Z"/>
         <path class="tuft" d="M51 54 l7 -5 M53 46 l6 -3"/>
+        <path class="lit" d="M42 74 Q34 30 48 16 Q56 10 66 16 Q82 26 96 42 Z" fill="url(#__light)"/>
       </g>
       <g class="ear ear-r">
         <path d="M158 74 Q166 30 152 16 Q144 10 134 16 Q118 26 104 42 Z" fill="url(#__fur)"/>
         <path class="inner" d="M150 62 Q155 34 148 24 Q143 20 136 24 Q124 32 114 44 Z"/>
         <path class="tuft" d="M149 54 l-7 -5 M147 46 l-6 -3"/>
+        <path class="lit" d="M158 74 Q166 30 152 16 Q144 10 134 16 Q118 26 104 42 Z" fill="url(#__light)"/>
       </g>
+      <path class="fluff" d="${HEAD_FLUFF}"/>
       <path d="${CAT_HEAD}" fill="url(#__fur)"/>
       <g clip-path="url(#__headc)">
         <ellipse cx="100" cy="27" rx="54" ry="30" fill="url(#__cap)"/>
@@ -103,6 +126,7 @@ const CAT_SVG = `
         <ellipse cx="100" cy="122.5" rx="15" ry="6" fill="url(#__chin)"/>
         <path class="dots" d="M88.5 109 h.1 M86.5 112 h.1 M89.8 112.6 h.1 M111.5 109 h.1 M113.5 112 h.1 M110.2 112.6 h.1"/>
         <path class="stripe-f" d="${HEAD_STRIPES}"/>
+        <path class="lit" d="${CAT_HEAD}" fill="url(#__light)"/>
         <path class="rim" d="${CAT_HEAD}" stroke="url(#__rim)"/>
       </g>
       <ellipse class="blush" cx="54" cy="113" rx="11" ry="6.5" fill="url(#__blush)"/>
@@ -170,6 +194,37 @@ const CAT_SVG = `
   </g>
 </svg>`;
 
+/* ---------- 场景光：每个地点的光从哪边来、什么颜色 ---------- */
+// from：从小猫指向光源（x 向右、y 向下）；key 亮面颜色，shade 暗面颜色，rim 轮廓光，glint 眼睛里的反光
+const CAT_LIGHTS = {
+  moon: { from: [-1, -.35], key: '#fff1dc', ka: .3, shade: '#141c38', sa: .5, rim: '#c4d8ff', ra: .6, glint: '#f2f6ff', ao: '#000' },
+  mars: { from: [-1, -.25], key: '#d6e4ff', ka: .26, shade: '#3a160a', sa: .5, rim: '#ffb27c', ra: .5, glint: '#e6efff', ao: '#1a0702' },
+  saturn: { from: [.8, -1], key: '#ffe7bd', ka: .26, shade: '#0e1220', sa: .45, rim: '#ffe2b0', ra: .5, glint: '#fff4de', ao: '#000' },
+  trappist: { from: [1, -.3], key: '#ff9058', ka: .36, shade: '#2a0705', sa: .55, rim: '#ff7a44', ra: .7, glint: '#ffd2b8', ao: '#140202' },
+  crab: { from: [.9, -.8], key: '#b2c0ff', ka: .3, shade: '#0c1030', sa: .45, rim: '#a8b8ff', ra: .6, glint: '#e2e8ff', ao: '#000' },
+  blackhole: { from: [.7, -1], key: '#ffb46c', ka: .3, shade: '#08080e', sa: .55, rim: '#ffa25c', ra: .6, glint: '#ffe0c0', ao: '#000' },
+  orion: { from: [.9, -.6], key: '#ffb4cc', ka: .3, shade: '#2a0c22', sa: .45, rim: '#ffc4dc', ra: .55, glint: '#ffe6f0', ao: '#10020a' },
+  pleiades: { from: [.9, -.9], key: '#c4d6ff', ka: .3, shade: '#0c1636', sa: .45, rim: '#d4e2ff', ra: .65, glint: '#eef4ff', ao: '#000' },
+  pillars: { from: [.9, -.7], key: '#ffdca8', ka: .26, shade: '#0a2626', sa: .5, rim: '#bfeee4', ra: .55, glint: '#e8fff8', ao: '#000' },
+  andromeda: { from: [.8, -.9], key: '#ffe8c8', ka: .26, shade: '#0e0e18', sa: .45, rim: '#ffe2bc', ra: .5, glint: '#fff4e4', ao: '#000' },
+  deepfield: { from: [.8, -.8], key: '#e2e8ff', ka: .2, shade: '#090b14', sa: .45, rim: '#c8d4ff', ra: .45, glint: '#f2f4ff', ao: '#000' },
+  cmb: { from: [.9, -.8], key: '#ffbe8a', ka: .3, shade: '#1a0c08', sa: .5, rim: '#ff9e6e', ra: .55, glint: '#ffe4d0', ao: '#000' },
+  none: { from: [.7, -1], key: '#ffffff', ka: .14, shade: '#2a2034', sa: .25, rim: '#cfe0ff', ra: .3, glint: '#ffffff', ao: '#000' },
+};
+let catLightNow = 'none';
+
+function catLight(place) {
+  catLightNow = CAT_LIGHTS[place] ? place : 'none';
+  const L = CAT_LIGHTS[catLightNow], st = document.documentElement.style;
+  for (const k of ['key', 'ka', 'shade', 'sa', 'rim', 'ra', 'glint', 'ao']) st.setProperty('--' + k, L[k]);
+  const [fx, fy] = L.from, d = Math.hypot(fx, fy) || 1, ux = fx / d * .5, uy = fy / d * .5;
+  const set = (el, a, b) => { el.setAttribute('x1', .5 + a * ux); el.setAttribute('y1', .5 + a * uy); el.setAttribute('x2', .5 + b * ux); el.setAttribute('y2', .5 + b * uy); };
+  for (const g of document.querySelectorAll('.cat .light-dir')) set(g, 1, -1);
+  for (const g of document.querySelectorAll('.cat .rim-dir')) set(g, -1, 1);
+  // 影子落在背光的一侧
+  for (const e of document.querySelectorAll('.cat .shadow')) e.setAttribute('cx', (100 - fx / d * 7).toFixed(1));
+}
+
 let catCount = 0;
 function catMarkup() {
   const p = `c${++catCount}-`;
@@ -179,6 +234,7 @@ function catMarkup() {
 function mountCats() {
   for (const host of document.querySelectorAll('.cat-host')) host.innerHTML = catMarkup();
   for (const host of document.querySelectorAll('.lotus-mode')) catPose(host, 1);
+  catLight(catLightNow);
 }
 
 /* ---------- 站着 ↔ 盘腿坐：s 从 0（站）到 1（盘腿），腿一路弯折收拢 ---------- */
