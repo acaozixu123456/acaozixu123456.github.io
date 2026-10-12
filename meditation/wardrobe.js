@@ -12,12 +12,12 @@ const ITEMS = [
   { id: 'scarf', name: '围巾', price: 60, slot: 'neck' },
   { id: 'glasses', name: '圆眼镜', price: 80, slot: 'face' },
   { id: 'beanie', name: '毛线帽', price: 100, slot: 'head' },
-  { id: 'coat-cream', name: '奶白毛色', price: 120, slot: 'coat' },
-  { id: 'coat-grey', name: '银灰毛色', price: 150, slot: 'coat' },
-  { id: 'coat-black', name: '黑猫', price: 200, slot: 'coat' },
 ];
 
 let wardrobe = { owned: [], worn: [], ...loadWardrobe() };
+// 毛色改成在捏脸里免费调，以前买毛色花的小鱼干退回来
+wardrobe.owned = wardrobe.owned.filter(id => ITEMS.some(i => i.id === id));
+wardrobe.worn = wardrobe.worn.filter(id => ITEMS.some(i => i.id === id));
 
 function loadWardrobe() {
   try {

@@ -986,7 +986,7 @@ function smTab(tab) {
   $('sm-cons').hidden = tab !== 'cons';
   if (tab === 'sights') renderSights(log);
   if (tab === 'cons') renderCons(log);
-  if (tab !== 'route') { closePlaceSheet(); window.scrollTo(0, 0); }
+  if (tab !== 'route') { closePlaceSheet(); $('starmap').scrollTop = 0; }
 }
 
 function openStarmap() {
@@ -994,7 +994,8 @@ function openStarmap() {
   smTab('route');
   show('starmap');
   // 把小猫所在的地方滚到屏幕中间
-  window.scrollTo(0, Math.max(0, $('sm-route').offsetTop + y - innerHeight * 0.45));
+  const sc = $('starmap');
+  sc.scrollTop = Math.max(0, sc.scrollTop + $('sm-route').getBoundingClientRect().top + y - innerHeight * 0.45);
 }
 
 function applyBackground() {
@@ -1011,7 +1012,7 @@ const RING_LEN = 2 * Math.PI * 90;
 
 function show(id) {
   for (const el of document.querySelectorAll('.screen')) el.classList.toggle('active', el.id === id);
-  window.scrollTo(0, 0);
+  $(id).scrollTop = 0;
   if (id === 'stats' || id === 'settings' || id === 'wardrobe' || id === 'starmap') stopNoise(0.8);
   const catHost = { home: 'home-cat', session: 'stage-cat', done: 'done-cat' }[id];
   Space.mode(catHost ? id : 'page', catHost ? $(catHost) : null);
@@ -1129,7 +1130,137 @@ function renderHome() {
   if (mood === 'lonely') cat.querySelector('.bubble text').textContent = '…';
 }
 
-/* ---------- 小猫衣柜 ---------- */
+/* ---------- 我的小猫：捏脸 ---------- */
+
+let wrTab = 'look';
+let lookCat = 'preset';
+
+// 每个分类下有哪几行；kind 决定画成色块还是文字
+const LOOK_CATS = [
+  ['preset', '推荐'],
+  ['fur', '毛色', [['fur', '毛色', 'swatch'], ['white', '白色部分', 'pill']]],
+  ['pattern', '花纹', [['pattern', '花纹', 'pill'], ['stripe', '花纹颜色', 'swatch']]],
+  ['eyes', '眼睛', [['eyes', '瞳色', 'swatch'], ['eyeSize', '大小', 'pill']]],
+  ['face', '五官', [['ears', '耳朵', 'pill'], ['muzzle', '嘴巴', 'pill'], ['nose', '鼻子', 'pill'], ['blush', '腮红', 'pill']]],
+  ['collar', '项圈', [['collar', '颜色', 'swatch'], ['name', '名字', 'name']]],
+];
+
+function swatchBg(key, id) {
+  const o = LOOK_OPTIONS[key][id];
+  if (key === 'fur') return `radial-gradient(circle at 35% 30%, ${o.hi}, ${o.fur} 55%, ${o.lo})`;
+  if (key === 'stripe') return o;
+  if (key === 'eyes') return o.c2 ? `linear-gradient(90deg, ${o.c[1]} 50%, ${o.c2[1]} 50%)` : `linear-gradient(${o.c[0]}, ${o.c[1]} 55%, ${o.c[2]})`;
+  if (key === 'collar') return o ? `linear-gradient(${o[1]}, ${o[0]} 60%, ${o[2]})` : '';
+  return '';
+}
+
+function optionLabel(key, id) {
+  const o = LOOK_OPTIONS[key][id];
+  const names = { black: '黑', brown: '棕', ginger: '姜黄', grey: '深灰', tan: '浅棕', silver: '浅灰', red: '红', pink: '粉', blue: '蓝', green: '绿' };
+  if (typeof o === 'string') return key === 'stripe' ? names[id] : o;
+  if (Array.isArray(o)) return key === 'collar' ? names[id] : o[0];
+  return o ? o.name : '不戴';
+}
+
+function lookPop() {
+  const host = $('wardrobe-cat');
+  host.classList.remove('love');
+  void host.offsetWidth;
+  host.classList.add('love');
+  clearTimeout(lookPop.t);
+  lookPop.t = setTimeout(() => host.classList.remove('love'), 1400);
+}
+
+function renderLook() {
+  const cats = $('look-cats');
+  cats.textContent = '';
+  for (const [id, name] of LOOK_CATS) {
+    const b = document.createElement('button');
+    b.textContent = name;
+    b.classList.toggle('on', id === lookCat);
+    b.addEventListener('click', () => { lookCat = id; renderLook(); });
+    cats.append(b);
+  }
+  const box = $('look-opts');
+  box.textContent = '';
+  box.className = 'look-opts look-' + lookCat;
+  if (lookCat === 'preset') {
+    for (const p of CAT_PRESETS) {
+      const b = document.createElement('button');
+      b.className = 'preset';
+      b.classList.toggle('on', Object.keys(p.look).every(k => catStyle[k] === p.look[k]));
+      b.innerHTML = catFace(p.look);
+      const n = document.createElement('span');
+      n.textContent = p.name;
+      b.append(n);
+      b.addEventListener('click', () => { setCatLook({ ...p.look }); lookPop(); renderLook(); });
+      box.append(b);
+    }
+    return;
+  }
+  const rows = LOOK_CATS.find(c => c[0] === lookCat)[2];
+  for (const [key, label, kind] of rows) {
+    const row = document.createElement('div');
+    row.className = 'look-row';
+    const l = document.createElement('div');
+    l.className = 'option-label';
+    l.textContent = label;
+    const opts = document.createElement('div');
+    opts.className = kind === 'swatch' ? 'swatches' : 'pills';
+    row.append(l, opts);
+    box.append(row);
+    if (kind === 'name') {
+      const input = document.createElement('input');
+      input.className = 'name-input';
+      input.maxLength = 6;
+      input.value = catStyle.name;
+      input.placeholder = '写在项圈上';
+      input.setAttribute('enterkeyhint', 'done');
+      input.addEventListener('input', () => setCatLook({ name: input.value.trim().slice(0, 6) }));
+      input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
+      opts.append(input);
+      continue;
+    }
+    for (const id of Object.keys(LOOK_OPTIONS[key])) {
+      const b = document.createElement('button');
+      const on = catStyle[key] === id;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', on);
+      if (kind === 'swatch') {
+        b.className += ' swatch' + (id === 'none' ? ' swatch-none' : '');
+        b.style.background = swatchBg(key, id);
+        b.setAttribute('aria-label', optionLabel(key, id));
+      } else {
+        b.textContent = optionLabel(key, id);
+      }
+      b.addEventListener('click', () => { setCatLook({ [key]: id }); renderLook(); });
+      opts.append(b);
+    }
+  }
+}
+
+function renderWrTab() {
+  for (const b of $('wr-tabs').children) b.classList.toggle('on', b.dataset.tab === wrTab);
+  $('look-panel').hidden = wrTab !== 'look';
+  $('items-panel').hidden = wrTab !== 'items';
+  if (wrTab === 'look') renderLook();
+  else renderWardrobe();
+}
+
+$('wr-tabs').addEventListener('click', e => {
+  const t = e.target.closest('button');
+  if (!t) return;
+  wrTab = t.dataset.tab;
+  renderWrTab();
+});
+
+$('look-random').addEventListener('click', () => {
+  setCatLook(randomCatLook());
+  lookPop();
+  if (wrTab === 'look') renderLook();
+});
+
+/* ---------- 我的小猫：配饰 ---------- */
 
 let buyArmed = null;
 
@@ -1473,7 +1604,7 @@ $('open-stats').addEventListener('click', () => {
   renderStats();
   show('stats');
 });
-$('open-wardrobe').addEventListener('click', () => { buyArmed = null; renderWardrobe(); show('wardrobe'); });
+$('open-wardrobe').addEventListener('click', () => { buyArmed = null; renderWardrobe(); renderWrTab(); show('wardrobe'); });
 $('open-settings').addEventListener('click', () => { renderSettings(); show('settings'); });
 $('open-map').addEventListener('click', openStarmap);
 $('place-tag').addEventListener('click', openStarmap);

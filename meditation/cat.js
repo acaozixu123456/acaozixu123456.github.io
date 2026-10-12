@@ -38,7 +38,20 @@ function fluff(cx, cy, rx, ry, from, to, n, len, w) {
 const HEAD_FLUFF = fluff(100, 84, 64, 53.5, 78, 102, 3, 5.5, 2.4);
 // 眼睛：左眼中心 (72, 93)，右眼 (128, 93)
 const EYE = [[72, 93], [128, 93]];
-const eyes = fn => EYE.map(([x, y]) => fn(x, y)).join('');
+const eyes = fn => EYE.map(([x, y], i) => fn(x, y, i)).join('');
+// 大片白（奶牛猫）：鼻梁一道白，连着两颊和下巴
+const WHITE_BLAZE = 'M100 76 C 103.5 76, 104.5 83, 105.5 90 C 106.5 96, 110 100.5, 118 102.5 C 132 106, 148 112, 160 128 L 160 140 L 40 140 L 40 128 C 52 112, 68 106, 82 102.5 C 90 100.5, 93.5 96, 94.5 90 C 95.5 83, 96.5 76, 100 76 Z';
+// 折耳：耳朵往前折，贴在头顶两侧
+const FOLD_EAR = 'M47 66 C 41 50, 50 34, 68 32 C 80 31, 89 37, 92 44 C 83 46, 73 50, 66 57 C 60 63, 53 67, 47 66 Z';
+const FOLD_EARS = ['l', 'r'].map(s => {
+  const t = s === 'r' ? ' transform="matrix(-1 0 0 1 200 0)"' : '';
+  return `<g class="ear ear-${s} ear-fold"><g${t}>
+        <path d="${FOLD_EAR}" fill="url(#__fur)"/>
+        <path class="point" d="${FOLD_EAR}" fill="url(#__pear)"/>
+        <path class="fold-in" d="M57 60 C 62 52, 72 46, 86 44"/>
+        <path class="lit" d="${FOLD_EAR}" fill="url(#__light)"/>
+      </g></g>`;
+}).join('');
 const stop = (o, v, a = 1) => `<stop offset="${o}" style="stop-color:var(${v});stop-opacity:${a}"/>`;
 
 const CAT_SVG = `
@@ -53,6 +66,10 @@ const CAT_SVG = `
     <radialGradient id="__bridge">${stop(0, '--bridge', .9)}${stop(1, '--bridge', 0)}</radialGradient>
     <radialGradient id="__cap">${stop(0, '--stripe', .6)}${stop(1, '--stripe', 0)}</radialGradient>
     <linearGradient id="__iris" x1="0" y1="0" x2="0" y2="1">${stop(0, '--eye-top')}${stop(.55, '--eye-mid')}${stop(1, '--eye-bot')}</linearGradient>
+    <linearGradient id="__iris2" x1="0" y1="0" x2="0" y2="1">${stop(0, '--eye2-top')}${stop(.55, '--eye2-mid')}${stop(1, '--eye2-bot')}</linearGradient>
+    <radialGradient id="__point" cy=".42">${stop(0, '--stripe', .9)}${stop(.55, '--stripe', .7)}${stop(1, '--stripe', 0)}</radialGradient>
+    <linearGradient id="__pear" x1="0" y1="0" x2="0" y2="1">${stop(0, '--stripe', .95)}${stop(.75, '--stripe', .5)}${stop(1, '--stripe', 0)}</linearGradient>
+    <radialGradient id="__ppaw" cy=".7">${stop(0, '--stripe', .75)}${stop(1, '--stripe', .2)}</radialGradient>
     <radialGradient id="__blush">${stop(0, '--cat-pink', .85)}${stop(1, '--cat-pink', 0)}</radialGradient>
     <linearGradient id="__rim" class="rim-dir" x1="0" y1="0" x2="1" y2="0">${stop(.6, '--rim', 0)}<stop offset="1" style="stop-color:var(--rim);stop-opacity:var(--ra)"/></linearGradient>
     <linearGradient id="__light" class="light-dir" x1="1" y1="0" x2="0" y2="1">
@@ -90,6 +107,7 @@ const CAT_SVG = `
       </g>
       <g class="thighs"><path class="limb thigh-r"/><path class="limb thigh-l"/></g>
       <path class="belly" d="M100 130 Q94 126 90 131 Q84 129 82 136 C 77 152, 78 170, 81 178 C 86 191, 114 191, 119 178 C 122 170, 123 152, 118 136 Q116 129 110 131 Q106 126 100 130 Z" fill="url(#__white)"/>
+      <path class="white-more" d="M100 124 C 80 124, 70 140, 70 160 C 70 186, 86 194, 100 194 C 114 194, 130 186, 130 160 C 130 140, 120 124, 100 124 Z" fill="url(#__white)"/>
       <path class="chest-fur" d="M93 139 q3 5 0 10 M100 135 q3 5 0 10 M107 139 q-3 5 0 10 M90 156 q2.5 4 0 8 M110 156 q-2.5 4 0 8 M100 152 q2.5 4 0 8"/>
       <path class="lit" d="${CAT_BODY}" fill="url(#__light)"/>
       <g class="legs">
@@ -98,18 +116,20 @@ const CAT_SVG = `
         <g class="foot foot-r"><ellipse class="light" rx="10.5" ry="6.5"/><ellipse class="pad" cx="-1" cy=".5" rx="3.6" ry="2.6"/><path class="toe" d="M-4 4 v-3.5 M4 4 v-3.5"/></g>
         <g class="foot foot-l"><ellipse class="light" rx="10.5" ry="6.5"/><ellipse class="pad" cx="1" cy=".5" rx="3.6" ry="2.6"/><path class="toe" d="M-4 4 v-3.5 M4 4 v-3.5"/></g>
       </g>
-      <g class="pawpos-l"><g class="paw paw-l"><ellipse cx="83" cy="190" rx="13.5" ry="8.5" fill="url(#__white)"/><ellipse class="lit" cx="83" cy="190" rx="13.5" ry="8.5" fill="url(#__light)"/><path class="toe" d="M79 192.5 v-3.5 M87 192.5 v-3.5"/></g></g>
-      <g class="pawpos-r"><g class="paw paw-r"><ellipse cx="117" cy="190" rx="13.5" ry="8.5" fill="url(#__white)"/><ellipse class="lit" cx="117" cy="190" rx="13.5" ry="8.5" fill="url(#__light)"/><path class="toe" d="M113 192.5 v-3.5 M121 192.5 v-3.5"/></g></g>
+      <g class="pawpos-l"><g class="paw paw-l"><ellipse cx="83" cy="190" rx="13.5" ry="8.5" fill="url(#__white)"/><ellipse class="point" cx="83" cy="190" rx="13.5" ry="8.5" fill="url(#__ppaw)"/><ellipse class="lit" cx="83" cy="190" rx="13.5" ry="8.5" fill="url(#__light)"/><path class="toe" d="M79 192.5 v-3.5 M87 192.5 v-3.5"/></g></g>
+      <g class="pawpos-r"><g class="paw paw-r"><ellipse cx="117" cy="190" rx="13.5" ry="8.5" fill="url(#__white)"/><ellipse class="point" cx="117" cy="190" rx="13.5" ry="8.5" fill="url(#__ppaw)"/><ellipse class="lit" cx="117" cy="190" rx="13.5" ry="8.5" fill="url(#__light)"/><path class="toe" d="M113 192.5 v-3.5 M121 192.5 v-3.5"/></g></g>
     </g>
     <g class="head">
-      <g class="ear ear-l">
+      <g class="ear ear-l ear-up">
         <path d="M42 74 Q34 30 48 16 Q56 10 66 16 Q82 26 96 42 Z" fill="url(#__fur)"/>
+        <path class="point" d="M42 74 Q34 30 48 16 Q56 10 66 16 Q82 26 96 42 Z" fill="url(#__pear)"/>
         <path class="inner" d="M50 62 Q45 34 52 24 Q57 20 64 24 Q76 32 86 44 Z"/>
         <path class="tuft" d="M51 54 l7 -5 M53 46 l6 -3"/>
         <path class="lit" d="M42 74 Q34 30 48 16 Q56 10 66 16 Q82 26 96 42 Z" fill="url(#__light)"/>
       </g>
-      <g class="ear ear-r">
+      <g class="ear ear-r ear-up">
         <path d="M158 74 Q166 30 152 16 Q144 10 134 16 Q118 26 104 42 Z" fill="url(#__fur)"/>
+        <path class="point" d="M158 74 Q166 30 152 16 Q144 10 134 16 Q118 26 104 42 Z" fill="url(#__pear)"/>
         <path class="inner" d="M150 62 Q155 34 148 24 Q143 20 136 24 Q124 32 114 44 Z"/>
         <path class="tuft" d="M149 54 l-7 -5 M147 46 l-6 -3"/>
         <path class="lit" d="M158 74 Q166 30 152 16 Q144 10 134 16 Q118 26 104 42 Z" fill="url(#__light)"/>
@@ -117,24 +137,27 @@ const CAT_SVG = `
       <path class="fluff" d="${HEAD_FLUFF}"/>
       <path d="${CAT_HEAD}" fill="url(#__fur)"/>
       <g clip-path="url(#__headc)">
-        <ellipse cx="100" cy="27" rx="54" ry="30" fill="url(#__cap)"/>
+        <ellipse class="cap" cx="100" cy="27" rx="54" ry="30" fill="url(#__cap)"/>
         <ellipse cx="100" cy="96" rx="7" ry="11" fill="url(#__bridge)"/>
-        <path d="M100 114 C 93 114, 88 110.5, 82 111 C 70 113, 57 119, 48 130 L 48 140 L 152 140 L 152 130 C 143 119, 130 113, 118 111 C 112 110.5, 107 114, 100 114 Z" fill="url(#__face)"/>
+        <path class="white-bib" d="M100 114 C 93 114, 88 110.5, 82 111 C 70 113, 57 119, 48 130 L 48 140 L 152 140 L 152 130 C 143 119, 130 113, 118 111 C 112 110.5, 107 114, 100 114 Z" fill="url(#__face)"/>
+        <path class="white-more" d="${WHITE_BLAZE}" fill="url(#__white)"/>
         <ellipse cx="100" cy="104" rx="7" ry="8" fill="url(#__muzzle)"/>
         <ellipse cx="92" cy="110.5" rx="11.5" ry="9" fill="url(#__muzzle)"/>
         <ellipse cx="108" cy="110.5" rx="11.5" ry="9" fill="url(#__muzzle)"/>
         <ellipse cx="100" cy="122.5" rx="15" ry="6" fill="url(#__chin)"/>
+        <ellipse class="point" cx="100" cy="102" rx="36" ry="30" fill="url(#__point)"/>
         <path class="dots" d="M88.5 109 h.1 M86.5 112 h.1 M89.8 112.6 h.1 M111.5 109 h.1 M113.5 112 h.1 M110.2 112.6 h.1"/>
         <path class="stripe-f" d="${HEAD_STRIPES}"/>
         <path class="lit" d="${CAT_HEAD}" fill="url(#__light)"/>
         <path class="rim" d="${CAT_HEAD}" stroke="url(#__rim)"/>
       </g>
+      ${FOLD_EARS}
       <ellipse class="blush" cx="54" cy="113" rx="11" ry="6.5" fill="url(#__blush)"/>
       <ellipse class="blush" cx="146" cy="113" rx="11" ry="6.5" fill="url(#__blush)"/>
       <g class="eyes eyes-closed">${eyes((x, y) => `<path d="M${x - 11} ${y + 1} Q${x} ${y + 9} ${x + 11} ${y + 1}"/>`)}</g>
       <g class="eyes eyes-happy">${eyes((x, y) => `<path d="M${x - 11} ${y + 5} Q${x} ${y - 5} ${x + 11} ${y + 5}"/>`)}</g>
       <g class="eyes-open">
-        ${eyes((x, y) => `<ellipse class="iris" cx="${x}" cy="${y}" rx="13" ry="14.5" fill="url(#__iris)"/>`)}
+        ${eyes((x, y, i) => `<ellipse class="iris" cx="${x}" cy="${y}" rx="13" ry="14.5" fill="url(#__iris${i ? 2 : ''})"/>`)}
         <g clip-path="url(#__eyec)"><g class="look">
           ${eyes((x, y) => `<ellipse class="pupil" cx="${x + .5}" cy="${y + .5}" rx="8" ry="11"/>`)}
           ${eyes((x, y) => `<circle class="shine" cx="${x + 4.6}" cy="${y - 5}" r="4.6"/><circle class="shine" cx="${x - 5}" cy="${y + 6.5}" r="2.1" opacity=".9"/><circle class="shine" cx="${x + 6.2}" cy="${y + 6}" r="1.1" opacity=".8"/>`)}
@@ -150,7 +173,7 @@ const CAT_SVG = `
         <path class="band" id="__collar" d="M68 130 Q100 147 132 130"/>
         <path class="band-hi" d="M69 126.2 Q100 142.4 131 126.2"/>
         <path class="band-lo" d="M69 133.8 Q100 151.6 131 133.8"/>
-        <text class="tag" dy="2.7"><textPath href="#__collar" startOffset="50%" text-anchor="middle">拿铁</textPath></text>
+        <text class="tag" dy="2.7"><textPath href="#__collar" startOffset="50%" text-anchor="middle">{{name}}</textPath></text>
       </g>
       <g class="acc acc-scarf">
         <path class="scarf-tail" d="M116 136 l6 30 l12 -3 l-4 -30 z"/>
@@ -228,7 +251,8 @@ function catLight(place) {
 let catCount = 0;
 function catMarkup() {
   const p = `c${++catCount}-`;
-  return CAT_SVG.replace(/__/g, p);
+  const name = (typeof catStyle === 'object' && catStyle.name || '').replace(/[<>&"]/g, '');
+  return CAT_SVG.replace(/__/g, p).replace('{{name}}', name);
 }
 
 function mountCats() {
