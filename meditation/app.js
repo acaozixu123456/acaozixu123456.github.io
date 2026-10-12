@@ -1143,7 +1143,9 @@ const LOOK_CATS = [
   ['eyes', '眼睛', [['eyes', '瞳色', 'swatch'], ['eyeSize', '大小', 'pill']]],
   ['face', '五官', [['ears', '耳朵', 'pill'], ['muzzle', '嘴巴', 'pill'], ['nose', '鼻子', 'pill'], ['blush', '腮红', 'pill']]],
   ['collar', '项圈', [['collar', '颜色', 'swatch'], ['name', '名字', 'name']]],
+  ['adv', '高级'],
 ];
+let advTab = 'shape';
 
 function swatchBg(key, id) {
   const o = LOOK_OPTIONS[key][id];
@@ -1188,16 +1190,18 @@ function renderLook() {
     for (const p of CAT_PRESETS) {
       const b = document.createElement('button');
       b.className = 'preset';
-      b.classList.toggle('on', Object.keys(p.look).every(k => catStyle[k] === p.look[k]));
+      b.classList.toggle('on', Object.keys(p.look).every(k => catStyle[k] === p.look[k]) &&
+        !Object.keys(catStyle.colors).length && !Object.keys(catStyle.shape).length);
       b.innerHTML = catFace(p.look);
       const n = document.createElement('span');
       n.textContent = p.name;
       b.append(n);
-      b.addEventListener('click', () => { setCatLook({ ...p.look }); lookPop(); renderLook(); });
+      b.addEventListener('click', () => { setCatLook({ ...p.look, colors: {}, shape: {} }); lookPop(); renderLook(); });
       box.append(b);
     }
     return;
   }
+  if (lookCat === 'adv') { renderAdvanced(box); return; }
   const rows = LOOK_CATS.find(c => c[0] === lookCat)[2];
   for (const [key, label, kind] of rows) {
     const row = document.createElement('div');
@@ -1239,6 +1243,101 @@ function renderLook() {
   }
 }
 
+// 高级：调形 / 取色 / 画笔
+function renderAdvanced(box) {
+  const tabs = document.createElement('div');
+  tabs.className = 'pills adv-tabs';
+  for (const [id, name] of [['shape', '调形'], ['color', '取色'], ['paint', '画笔']]) {
+    const b = document.createElement('button');
+    b.textContent = name;
+    b.classList.toggle('on', id === advTab);
+    b.addEventListener('click', () => { advTab = id; renderLook(); });
+    tabs.append(b);
+  }
+  box.append(tabs);
+  const body = document.createElement('div');
+  body.className = 'adv-' + advTab;
+  box.append(body);
+
+  if (advTab === 'shape') {
+    for (const [k, name, lo, hi, def] of CAT_SHAPES) {
+      const row = document.createElement('label');
+      row.className = 'adv-slider';
+      const t = document.createElement('span');
+      t.textContent = name;
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.min = lo;
+      input.max = hi;
+      input.step = 'any';
+      input.value = catStyle.shape[k] ?? def;
+      const mark = () => row.classList.toggle('moved', k in catStyle.shape);
+      mark();
+      input.addEventListener('input', () => {
+        const shape = { ...catStyle.shape, [k]: +input.value };
+        // 拖回中间附近就当是默认值
+        if (Math.abs(+input.value - def) < (hi - lo) / 50) delete shape[k];
+        setCatLook({ shape });
+        mark();
+      });
+      // 双击滑杆回到默认
+      input.addEventListener('dblclick', () => { const shape = { ...catStyle.shape }; delete shape[k]; setCatLook({ shape }); input.value = def; mark(); });
+      row.append(t, input);
+      body.append(row);
+    }
+    const reset = document.createElement('button');
+    reset.className = 'text-btn muted adv-reset';
+    reset.textContent = '形状复原';
+    reset.addEventListener('click', () => { setCatLook({ shape: {} }); renderLook(); });
+    body.append(reset);
+  } else if (advTab === 'color') {
+    for (const [part, name] of COLOR_PARTS) {
+      const cell = document.createElement('div');
+      cell.className = 'adv-cell';
+      const sw = document.createElement('label');
+      sw.className = 'swatch';
+      sw.style.background = catPartColor(part);
+      sw.classList.toggle('on', !!catStyle.colors[part]);
+      const input = document.createElement('input');
+      input.type = 'color';
+      input.value = catPartColor(part);
+      input.addEventListener('input', () => {
+        catStyle.colors = { ...catStyle.colors, [part]: input.value };
+        setCatLook({});
+        sw.style.background = input.value;
+        sw.classList.add('on');
+        x.hidden = false;
+      });
+      sw.append(input);
+      const t = document.createElement('span');
+      t.textContent = name;
+      const x = document.createElement('button');
+      x.className = 'adv-undo';
+      x.textContent = '还原';
+      x.hidden = !catStyle.colors[part];
+      x.addEventListener('click', () => {
+        const colors = { ...catStyle.colors };
+        delete colors[part];
+        catStyle.colors = colors;
+        setCatLook({});
+        renderLook();
+      });
+      cell.append(sw, t, x);
+      body.append(cell);
+    }
+  } else {
+    const n = paintCount(catPaint);
+    const p = document.createElement('p');
+    p.className = 'hint center';
+    p.textContent = n ? `已经画了 ${n} 笔。画上去的会跟着小猫动，调形也跟着变。` : '用手指直接在小猫身上画：花纹、斑点、眉毛都行。画上去的会跟着小猫一起动。';
+    const open = document.createElement('button');
+    open.className = 'start-btn adv-open';
+    open.textContent = n ? '继续画' : '打开画板';
+    open.addEventListener('click', () => openPainter(saved => { renderLook(); if (saved) lookPop(); }));
+    body.append(p, open);
+  }
+}
+
 function renderWrTab() {
   for (const b of $('wr-tabs').children) b.classList.toggle('on', b.dataset.tab === wrTab);
   $('look-panel').hidden = wrTab !== 'look';
@@ -1255,7 +1354,7 @@ $('wr-tabs').addEventListener('click', e => {
 });
 
 $('look-random').addEventListener('click', () => {
-  setCatLook(randomCatLook());
+  setCatLook({ ...randomCatLook(), colors: {} });
   lookPop();
   if (wrTab === 'look') renderLook();
 });

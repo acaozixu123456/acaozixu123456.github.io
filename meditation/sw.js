@@ -1,5 +1,5 @@
 // 改动任何文件后把版本号加一，手机上下次打开会自动更新缓存
-const CACHE = 'meditation-v16';
+const CACHE = 'meditation-v17';
 const ASSETS = [
   './',
   'index.html',
@@ -9,6 +9,7 @@ const ASSETS = [
   'effects.js',
   'wardrobe.js',
   'custom.js',
+  'paint.js',
   'space.js',
   'travel.js',
   'sky.js',

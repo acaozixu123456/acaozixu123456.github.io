@@ -11,7 +11,7 @@ const CARD_FEET_Y = -0.2;   // 脚底位置（以画面高度为 1，中心为�
 function catImage(svgEl, w, h) {
   const clone = svgEl.cloneNode(true);
   const src = [svgEl, ...svgEl.querySelectorAll('*')], dst = [clone, ...clone.querySelectorAll('*')];
-  const props = ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'stroke-dashoffset', 'opacity', 'fill-opacity', 'stroke-opacity', 'stop-color', 'stop-opacity', 'display', 'scale', 'transform-origin', 'transform-box', 'font-family', 'font-size', 'font-weight', 'letter-spacing'];
+  const props = ['fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'stroke-dashoffset', 'opacity', 'fill-opacity', 'stroke-opacity', 'stop-color', 'stop-opacity', 'display', 'scale', 'rotate', 'translate', 'transform-origin', 'transform-box', 'font-family', 'font-size', 'font-weight', 'letter-spacing'];
   src.forEach((el, i) => {
     const cs = getComputedStyle(el), d = dst[i];
     for (const p of props) d.style.setProperty(p, cs.getPropertyValue(p));

@@ -63,6 +63,30 @@ const LOOK_OPTIONS = {
   eyes: EYE_COLORS, eyeSize: EYE_SIZES, ears: EARS, nose: NOSES, blush: BLUSH, collar: COLLARS,
 };
 
+/* 高级：滑杆调形，[键, 名字, 最小, 最大, 默认, 对应的 CSS 变量] */
+const CAT_SHAPES = [
+  ['headS', '头大小', .85, 1.15, 1, 'head-s'],
+  ['headW', '脸宽', .88, 1.15, 1, 'head-w'],
+  ['earS', '耳朵大小', .7, 1.3, 1, 'ear-s'],
+  ['earA', '耳朵张开', -18, 18, 0, 'ear-a'],
+  ['eyeS', '眼睛大小', .8, 1.25, 1, null],
+  ['eyeH', '眼睛圆扁', .75, 1.15, 1, 'eye-h'],
+  ['eyeD', '眼距', -6, 6, 0, 'eye-d'],
+  ['eyeY', '眼睛高低', -6, 6, 0, 'eye-y'],
+  ['noseS', '鼻子嘴巴', .7, 1.5, 1, 'nose-s'],
+  ['muzS', '嘴套大小', .7, 1.4, 1, 'muz-s'],
+  ['bodyW', '胖瘦', .85, 1.2, 1, 'body-w'],
+  ['tailS', '尾巴', .6, 1.3, 1, 'tail-s'],
+];
+// 高级：随便取色的部位
+const COLOR_PARTS = [
+  ['fur', '毛色'], ['stripe', '花纹'], ['white', '白色部分'], ['muzzle', '嘴套'], ['eye', '左眼'],
+  ['eye2', '右眼'], ['nose', '鼻子'], ['pink', '耳朵内侧'], ['collar', '项圈'],
+];
+// 点基础选项时，把对应部位的自定义颜色清掉，不然点了看不出变化
+const COLOR_OF_OPTION = { fur: ['fur'], stripe: ['stripe'], white: ['white'], muzzle: ['muzzle'], eyes: ['eye', 'eye2'], nose: ['nose'], collar: ['collar'] };
+const HEX = /^#[0-9a-f]{6}$/i;
+
 let catStyle = loadCatLook();
 
 function loadCatLook() {
@@ -80,6 +104,8 @@ function loadCatLook() {
   }
   for (const k in LOOK_OPTIONS) if (!(look[k] in LOOK_OPTIONS[k])) look[k] = DEFAULT_LOOK[k];
   if (typeof look.name !== 'string') look.name = DEFAULT_LOOK.name;
+  look.shape = Object.fromEntries(CAT_SHAPES.filter(([k, , lo, hi]) => typeof look.shape?.[k] === 'number' && look.shape[k] >= lo && look.shape[k] <= hi).map(([k]) => [k, look.shape[k]]));
+  look.colors = Object.fromEntries(COLOR_PARTS.filter(([k]) => HEX.test(look.colors?.[k] || '')).map(([k]) => [k, look.colors[k]]));
   return look;
 }
 
@@ -95,7 +121,13 @@ const luma = h => { const [r, g, b] = hexRgb(h); return (0.2126 * r + 0.7152 * g
 
 // 一套样子 → 全部颜色变量
 function catLookVars(look) {
-  const F = FURS[look.fur], v = {};
+  const C0 = look.colors || {}, S = look.shape || {}, v = {};
+  // 自己取的毛色：按这个颜色推出亮面、暗面和身体的几档
+  const c = C0.fur;
+  const F = c ? {
+    hi: mixHex(c, '#ffffff', .3), fur: c, lo: mixHex(c, '#000000', .38), bhi: mixHex(c, '#ffffff', .18),
+    body: mixHex(c, '#000000', .15), blo: mixHex(c, '#000000', .6), bridge: mixHex(c, '#000000', .1),
+  } : FURS[look.fur];
   Object.assign(v, {
     'fur-hi': F.hi, fur: F.fur, 'fur-lo': F.lo, 'body-hi': F.bhi, body: F.body, 'body-lo': F.blo, 'fur-dark': F.lo,
     stripe: STRIPE_COLORS[look.stripe],
@@ -103,8 +135,9 @@ function catLookVars(look) {
   // 白色部分；没有白就用比身体浅一点的毛
   if (look.white === 'none') Object.assign(v, { 'white-hi': mixHex(F.bhi, '#ffffff', .12), 'fur-light': mixHex(F.bhi, F.body, .35), 'white-lo': F.body });
   else Object.assign(v, { 'white-hi': '#ffffff', 'fur-light': '#fbf7f1', 'white-lo': luma(F.fur) < .3 ? '#cfc6bb' : '#dcd0c2' });
+  if (C0.white) Object.assign(v, { 'white-hi': mixHex(C0.white, '#ffffff', .5), 'fur-light': C0.white, 'white-lo': mixHex(C0.white, '#000000', .14) });
   const light = v['fur-light'];
-  const muzzle = {
+  const muzzle = C0.muzzle ? [C0.muzzle, mixHex(C0.muzzle, '#ffffff', .15)] : {
     tan: ['#dcb48a', '#e2c19c'],
     light: [mixHex(F.hi, '#ffffff', .4), mixHex(F.hi, '#ffffff', .5)],
     white: ['#fbf7f1', '#fdfaf6'],
@@ -121,12 +154,20 @@ function catLookVars(look) {
   v.whisker = luma(light) > .85 && luma(F.fur) > .8 ? '#d8d0c4' : '#ffffff';
   const E = EYE_COLORS[look.eyes], E2 = E.c2 || E.c;
   ['top', 'mid', 'bot'].forEach((k, i) => { v['eye-' + k] = E.c[i]; v['eye2-' + k] = E2[i]; });
-  v['eye-s'] = EYE_SIZES[look.eyeSize][1];
-  const N = NOSES[look.nose];
+  const eyeOf = (k, c) => { v[k + '-top'] = mixHex(c, '#000000', .45); v[k + '-mid'] = c; v[k + '-bot'] = mixHex(c, '#ffffff', .55); };
+  if (C0.eye) { eyeOf('eye', C0.eye); if (!C0.eye2) eyeOf('eye2', C0.eye); }
+  if (C0.eye2) eyeOf('eye2', C0.eye2);
+  if (C0.stripe) v.stripe = C0.stripe;
+  if (C0.pink) v['cat-pink'] = C0.pink;
+  v['eye-s'] = EYE_SIZES[look.eyeSize][1] * (S.eyeS ?? 1);
+  const N = C0.nose ? [0, C0.nose, mixHex(C0.nose, '#000000', .5)] : NOSES[look.nose];
   v.nose = N[1];
   v['nose-ink'] = N[2];
-  const C = COLLARS[look.collar] || COLLARS.brown;
+  const C = C0.collar
+    ? [C0.collar, mixHex(C0.collar, '#ffffff', .25), mixHex(C0.collar, '#000000', .3), luma(C0.collar) > .6 ? '#4a3a30' : '#fff4e6']
+    : COLLARS[look.collar] || COLLARS.brown;
   Object.assign(v, { collar: C[0], 'collar-hi': C[1], 'collar-lo': C[2], 'collar-text': C[3] });
+  for (const [k, , , , d, cssVar] of CAT_SHAPES) if (cssVar) v[cssVar] = S[k] ?? d;
   return v;
 }
 
@@ -141,7 +182,19 @@ function applyCatLook() {
   for (const t of document.querySelectorAll('.cat .tag textPath')) t.textContent = catStyle.name;
 }
 
+// 当前每个可取色部位的颜色（取色面板显示用）
+function catPartColor(part) {
+  const v = catLookVars(catStyle);
+  return catStyle.colors[part] || {
+    fur: v.fur, stripe: v.stripe, white: v['fur-light'], muzzle: v.muzzle, eye: v['eye-mid'], eye2: v['eye2-mid'],
+    nose: v.nose, pink: v['cat-pink'] || '#ef9f9a', collar: v.collar,
+  }[part];
+}
+
 function setCatLook(patch) {
+  const colors = { ...catStyle.colors };
+  for (const k in patch) for (const c of COLOR_OF_OPTION[k] || []) delete colors[c];
+  catStyle.colors = colors;
   Object.assign(catStyle, patch);
   saveCatLook();
   applyCatLook();
@@ -174,6 +227,68 @@ function catFace(look, open = true) {
     ? `<ellipse cx="${x}" cy="93" rx="${13 * v['eye-s']}" ry="${14.5 * v['eye-s']}" fill="${c}" stroke="${v['cat-ink']}" stroke-width="2"/><ellipse cx="${x}" cy="94" rx="${7 * v['eye-s']}" ry="${10 * v['eye-s']}" fill="#17110e"/><circle cx="${x + 4}" cy="88" r="3.6" fill="#fff"/>`
     : `<path d="M${x - 11} 94 Q${x} 102 ${x + 11} 94" stroke="${v['cat-ink']}" stroke-width="5" fill="none" stroke-linecap="round"/>`;
   return `<svg class="cat-face" viewBox="26 8 148 132" aria-hidden="true">${ears}<ellipse fill="${v.fur}" cx="100" cy="84" rx="64" ry="51"/>${stripes}${white}<ellipse fill="${v.muzzle}" cx="100" cy="110" rx="15" ry="9"/>${point}${eye(72, v['eye-mid'])}${eye(128, v['eye2-mid'])}<path fill="${v.nose}" d="M96 103 h8 l-4 5 z"/></svg>`;
+}
+
+/* ---------- 画笔：自己在小猫身上画的笔画 ---------- */
+// 按部位分层存，坐标是各部位自己的坐标，所以小猫动、调了形，画上去的也跟着走
+// 一笔：{ d 路径, c 颜色, w 粗细, o 不透明度, s 柔边, e 橡皮, f 不裁边 }
+
+const CAT_PAINT_KEY = 'meditation.cat.paint.v1';
+const PAINT_LAYERS = ['head', 'ear-l', 'ear-r', 'body', 'paw-l', 'paw-r', 'tail'];
+let catPaint = loadCatPaint();
+
+function loadCatPaint() {
+  let p = {};
+  try { p = JSON.parse(localStorage.getItem(CAT_PAINT_KEY)) || {}; } catch {}
+  const out = {};
+  for (const l of PAINT_LAYERS) out[l] = Array.isArray(p[l]) ? p[l].filter(s => s && typeof s.d === 'string') : [];
+  return out;
+}
+
+function saveCatPaint() {
+  try { localStorage.setItem(CAT_PAINT_KEY, JSON.stringify(catPaint)); return true; } catch { return false; }
+}
+
+const paintCount = paint => PAINT_LAYERS.reduce((n, l) => n + paint[l].filter(s => !s.e).length, 0);
+
+function strokeSvg(s, color = s.c) {
+  const a = `d="${s.d}" fill="none" stroke="${color}" stroke-linecap="round" stroke-linejoin="round"`;
+  if (!s.s) return `<path ${a} stroke-width="${s.w}" stroke-opacity="${s.o}"/>`;
+  // 柔边：几层由粗到细的半透明线叠起来，不用滤镜
+  return `<g opacity="${s.o}">${[1, .78, .56, .36].map(k => `<path ${a} stroke-width="${(s.w * k).toFixed(2)}" stroke-opacity=".32"/>`).join('')}</g>`;
+}
+
+// 一层的笔画；遇到橡皮，就把前面画的整体套一个遮罩
+function paintLayerSvg(list, free, idBase, defs) {
+  let out = '', n = 0;
+  for (const s of list) {
+    if (s.e) {
+      if (!out) continue;
+      const id = idBase + n++;
+      defs.push(`<mask id="${id}" maskUnits="userSpaceOnUse" x="-100" y="-100" width="400" height="410"><rect x="-100" y="-100" width="400" height="410" fill="#fff"/>${strokeSvg({ ...s, o: 1 }, '#000')}</mask>`);
+      out = `<g mask="url(#${id})">${out}</g>`;
+    } else if (!!s.f === free) out += strokeSvg(s);
+  }
+  return out;
+}
+
+function renderCatPaint(svg, paint = catPaint) {
+  const defsEl = svg.querySelector('.pt-defs');
+  const ref = svg.querySelector('clipPath[id$="headc"]');
+  if (!defsEl || !ref) return;
+  const pfx = ref.id.slice(0, -5), defs = [];
+  for (const l of PAINT_LAYERS) {
+    const list = paint[l] || [];
+    for (const [cls, free] of [['ptc', false], ['ptf', true]]) {
+      const html = paintLayerSvg(list, free, `${pfx}pe-${l}-${cls}-`, defs);
+      for (const g of svg.querySelectorAll(`.${cls}[data-l="${l}"]`)) g.innerHTML = html;
+    }
+  }
+  defsEl.innerHTML = defs.join('');
+}
+
+function renderAllPaint() {
+  for (const svg of document.querySelectorAll('.cat')) if (!svg.closest('#paint-cat')) renderCatPaint(svg);
 }
 
 applyCatLook();
