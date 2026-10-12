@@ -1,0 +1,650 @@
+'use strict';
+
+/* ---------- 宇宙背景：每个地方一段 WebGL 着色器，在显卡上逐像素实时绘制 ---------- */
+
+const GLSL_HEAD = `
+precision highp float;
+uniform vec2 uRes; uniform float uT; uniform float uB;
+#define PI 3.14159265
+mat2 rot(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);}
+float h12(vec2 p){vec3 p3=fract(vec3(p.xyx)*.1031);p3+=dot(p3,p3.yzx+33.33);return fract((p3.x+p3.y)*p3.z);}
+vec2 h22(vec2 p){vec3 p3=fract(vec3(p.xyx)*vec3(.1031,.1030,.0973));p3+=dot(p3,p3.yzx+33.33);return fract((p3.xx+p3.yz)*p3.zy);}
+float h13(vec3 p3){p3=fract(p3*.1031);p3+=dot(p3,p3.zyx+31.32);return fract((p3.x+p3.y)*p3.z);}
+float n2(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*(3.-2.*f);return mix(mix(h12(i),h12(i+vec2(1,0)),u.x),mix(h12(i+vec2(0,1)),h12(i+vec2(1,1)),u.x),u.y);}
+float n3(vec3 p){vec3 i=floor(p),f=fract(p);vec3 u=f*f*(3.-2.*f);
+ return mix(mix(mix(h13(i),h13(i+vec3(1,0,0)),u.x),mix(h13(i+vec3(0,1,0)),h13(i+vec3(1,1,0)),u.x),u.y),
+            mix(mix(h13(i+vec3(0,0,1)),h13(i+vec3(1,0,1)),u.x),mix(h13(i+vec3(0,1,1)),h13(i+vec3(1,1,1)),u.x),u.y),u.z);}
+const mat2 M2=mat2(1.6,1.2,-1.2,1.6);
+float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<6;i++){v+=a*n2(p);p=M2*p;a*=.5;}return v;}
+float fbm4(vec2 p){float v=0.,a=.5;for(int i=0;i<4;i++){v+=a*n2(p);p=M2*p;a*=.5;}return v;}
+float fbm3(vec3 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*n3(p);p=p*2.03+vec3(1.7,9.2,3.1);a*=.5;}return v;}
+vec3 starL(vec2 p,float sc,float dens,float seed){
+  vec2 g=p*sc,id=floor(g),f=fract(g)-.5;
+  float h=h12(id+seed);
+  if(h>dens)return vec3(0.);
+  vec2 d=f-(h22(id+seed*1.3)-.5)*.55;
+  float px=sc/uRes.y;
+  float b=pow(h12(id+seed+7.),9.)*5.+.2;
+  float tw=.7+.3*sin(uT*(.5+h*2.5)+h*60.);
+  float l=length(d);
+  float c=exp(-l*l/(px*px*.8))+.06*px/(l+px)*smoothstep(.5,.1,l)*b;
+  vec3 col=mix(vec3(.62,.74,1.),vec3(1.,.8,.62),h12(id+seed+3.));
+  return col*c*b*tw;
+}
+vec3 stars(vec2 p){return starL(p,190.,.1,1.)*.3+starL(p,75.,.1,2.)*.55+starL(p,28.,.12,3.)*.9;}
+vec3 spikeStar(vec2 d,float s){float l=length(d);
+  float c=exp(-l*l*90000./(s*s))*4.+.0016*s/(l+.0015);
+  c+=(exp(-abs(d.x)*1400./s)*exp(-abs(d.y)*22./s)+exp(-abs(d.y)*1400./s)*exp(-abs(d.x)*22./s))*.9;
+  return vec3(c);}
+`;
+const SCENES = {
+  moon: { q: .7, fs: `
+float crater(vec2 q,float sc,float seed,float dens){
+  vec2 g=q*sc,id=floor(g),f=fract(g);float h=0.;
+  for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){
+    vec2 n=vec2(float(i),float(j));
+    float hh=h12(id+n+seed);
+    if(hh>dens)continue;
+    vec2 o=h22(id+n+seed*1.7);
+    float s=.16+.3*h12(id+n+seed+4.);
+    float x=length(f-n-o)/s;
+    float pr=x<1.?mix(-.6,.28,x*x*x):.28*exp(-(x-1.)*3.5);
+    h+=pr*s;
+  }
+  return h/sc;
+}
+float moonH(vec2 q){return fbm4(q*2.5)*.05+crater(q,.7,1.,.45)*1.1+crater(q,2.2,7.,.55)*.9+crater(q,7.,3.,.6)*.7;}
+vec3 scene(vec2 uv){
+  vec3 col=stars(uv)*.9;
+  vec3 L=normalize(vec3(-.9,.28,.4));
+  vec2 c=vec2(.075,.2+.01*sin(uT*.05)); float R=.105;
+  vec2 d=(uv-c)/R; float rr=length(d);
+  float pw=1./(R*uRes.y);
+  float sideLit=clamp(dot(normalize(d),normalize(L.xy))*.8+.35,0.,1.);
+  col+=vec3(.12,.32,1.)*exp(-(rr-1.)*7.)*step(1.,rr)*.35*sideLit*(.8+.4*uB);
+  if(rr<1.){
+    vec3 n=vec3(d,sqrt(1.-rr*rr));
+    vec3 p=n; p.yz=rot(.35)*p.yz; p.xz=rot(uT*.01)*p.xz;
+    float land=fbm3(p*2.3+3.);
+    float isL=smoothstep(.52,.545,land);
+    vec3 ocean=mix(vec3(.002,.012,.05),vec3(.006,.04,.12),fbm3(p*7.));
+    vec3 grd=mix(vec3(.03,.06,.018),vec3(.2,.13,.06),smoothstep(.56,.66,land+.1*fbm3(p*9.)));
+    grd*=.7+.6*fbm3(p*20.);
+    vec3 surf=mix(ocean,grd,isL);
+    surf=mix(surf,vec3(.75),smoothstep(.8,.9,abs(p.y)+.1*fbm3(p*12.)));
+    vec3 pc=p; pc.xz=rot(uT*.005)*pc.xz;
+    float cl=fbm3(pc*3.2+vec3(0.,0.,uT*.003))+.35*fbm3(pc*13.)-.18;
+    cl=smoothstep(.36,.7,cl);
+    float nl=dot(n,L), dif=max(nl,0.);
+    vec3 hv=normalize(L+vec3(0.,0.,1.));
+    float spec=pow(max(dot(n,hv),0.),70.)*(1.-isL)*(1.-cl)*1.6;
+    vec3 lit=surf*dif*2.6+spec*vec3(1.,.85,.7);
+    lit=mix(lit,vec3(.85,.88,.95)*dif*1.7,cl);
+    float term=smoothstep(-.12,.3,nl);
+    lit+=vec3(.12,.35,1.)*pow(1.-n.z,2.5)*term*1.3;
+    float city=smoothstep(.82,.9,n3(p*70.))*isL*(1.-smoothstep(-.15,.02,nl));
+    lit+=vec3(1.,.55,.2)*city*.25;
+    col=mix(col,lit,smoothstep(1.,1.-pw*1.5,rr));
+  }
+  float yh=-.07-.22*uv.x*uv.x+.004*fbm4(vec2(uv.x*14.,1.));
+  float py=1./uRes.y;
+  if(uv.y<yh+py){
+    float dy=max(yh-uv.y,.0012);
+    float z=.5/dy;
+    vec2 q=vec2(uv.x*z,z)*3.;
+    float e=.006+.002*z;
+    float h0=moonH(q),hx=moonH(q+vec2(e,0.)),hz=moonH(q+vec2(0.,e));
+    vec3 n=normalize(vec3(-(hx-h0)/e,1.,-(hz-h0)/e));
+    vec3 Lg=normalize(vec3(-.8,.3,.5));
+    float dif=max(dot(n,Lg),0.);
+    float alb=.09+.07*fbm4(q*.25+9.)+.03*n2(q*30.);
+    vec3 g=vec3(1.,.96,.9)*alb*dif*3.4+.0015;
+    vec3 gf=vec3(1.,.96,.9)*.13*Lg.y*3.6;
+    g=mix(g,gf,smoothstep(8.,40.,z));
+    col=mix(col,g,smoothstep(yh+py,yh-py,uv.y));
+  }
+  return col;
+}` },
+
+  mars: { q: .85, fs: `
+vec3 scene(vec2 uv){
+  vec2 sp=vec2(-.12,.05+.008*sin(uT*.04));
+  vec3 sky=mix(vec3(.32,.13,.05),vec3(.012,.008,.01),smoothstep(-.04,.42,uv.y));
+  sky=mix(sky,vec3(.45,.22,.09),smoothstep(.02,-.06,uv.y));
+  vec2 ds=(uv-sp)*vec2(1.,1.45); float dsun=length(ds);
+  sky*=1.-.65*exp(-dsun*4.5);
+  sky+=vec3(.16,.42,1.)*(exp(-dsun*6.5)*.9+exp(-dsun*20.)*1.6)*(.85+.3*uB);
+  float ls=length(uv-sp);
+  sky+=vec3(1.,1.,1.05)*(smoothstep(.0105,.0085,ls)*6.+exp(-ls*110.)*2.5);
+  float hz=fbm(vec2(uv.x*2.5-uT*.008,uv.y*16.));
+  sky+=vec3(.16,.07,.03)*hz*smoothstep(.28,-.02,uv.y)*.8;
+  sky+=stars(uv)*smoothstep(.12,.35,uv.y)*.55;
+  vec2 pp=vec2(mod(uT*.003+.2,.8)-.4,.34); vec2 dp=(uv-pp)/vec2(.011,.0085);
+  if(dot(dp,dp)<1.)sky=vec3(.006,.004,.004)+vec3(.05,.04,.035)*smoothstep(-.2,.8,-dp.x)*(.7+.3*n2(dp*4.));
+  vec3 col=sky;
+  for(int i=0;i<4;i++){
+    float fi=float(i);
+    float base=-.01-fi*.075;
+    float x=uv.x*(1.+fi*.7)+fi*3.7+uT*.0015*(fi+1.);
+    float y=base+.04*(fbm4(vec2(x*2.2,fi*4.))-.5)*(1.+fi*.6)+.012*sin(x*5.+fi*2.);
+    if(uv.y<y){
+      float depth=1.-fi/3.;
+      float dd=y-uv.y;
+      vec3 dune=mix(vec3(.022,.007,.003),vec3(.13,.05,.02),depth);
+      float rip=fbm(vec2(x*55.+dd*90.,dd*26.+fi));
+      dune*=.75+.5*rip*(1.-depth*.6);
+      float rim=exp(-dd*(150.-fi*25.))*exp(-abs(uv.x-sp.x)*2.5);
+      dune+=vec3(.75,.38,.18)*rim*(.35+.2*(1.-depth));
+      dune=mix(dune,sky*.55,depth*.5);
+      col=mix(col,dune,smoothstep(0.,1.5/uRes.y,dd));
+    }
+  }
+  vec2 dg=uv*vec2(26.,14.)+vec2(-uT*.25,0.);
+  vec2 id=floor(dg); vec2 f=fract(dg)-.5-(h22(id)-.5)*.6;
+  col+=vec3(.9,.55,.35)*exp(-dot(f,f)*400.)*step(.7,h12(id))*.25*smoothstep(.1,-.2,uv.y);
+  return col;
+}` },
+
+  saturn: { q: .9, fs: `
+float ringD(float k){
+  if(k<1.24||k>2.28)return 0.;
+  float d=smoothstep(1.24,1.5,k)*.28;
+  d+=smoothstep(1.52,1.56,k)*smoothstep(1.955,1.94,k)*.72;
+  d+=smoothstep(2.025,2.04,k)*smoothstep(2.28,2.26,k)*.62;
+  d*=1.-.9*smoothstep(.006,0.,abs(k-2.215));
+  d*=.72+.28*n2(vec2(k*190.,1.));
+  d*=.85+.15*sin(k*520.);
+  return clamp(d,0.,1.);
+}
+vec3 ringC(float k){return mix(vec3(.42,.33,.22),vec3(.62,.55,.44),n2(vec2(k*35.,3.)))*(1.-.35*smoothstep(1.5,1.24,k));}
+vec3 scene(vec2 uv){
+  vec3 col=stars(uv);
+  vec3 rd=normalize(vec3(uv-vec2(0.,.17),-2.2));
+  vec3 C=vec3(0.,0.,-19.); float R=1.;
+  vec3 N=normalize(vec3(-.28+.02*sin(uT*.02),1.,.34));
+  vec3 L=normalize(vec3(-.9,.35,.6));
+  float b=dot(C,rd), cc=dot(C,C)-R*R, disc=b*b-cc;
+  float ts=disc>0.?b-sqrt(disc):1e9;
+  float dn=dot(rd,N);
+  float tr=dot(C,N)/dn;
+  vec3 H=rd*tr; float k=length(H-C)/R;
+  float rden=tr>0.?ringD(k):0.;
+  // 环的颜色：光照面 / 背光面，土星在环上的影子
+  vec3 rcol=vec3(0.);
+  if(rden>0.){
+    vec3 oc=H-C; float bb=dot(oc,L); float c2=dot(oc,oc)-R*R;
+    float sh=(bb<0.&&bb*bb-c2>0.)?.04:1.;
+    float sameSide=sign(dot(N,L))*sign(dot(N,-rd));
+    float lit=sameSide>0.?abs(dot(N,L))*2.4:(1.-rden)*1.4+.1;
+    rcol=ringC(k)*lit*sh;
+  }
+  if(ts<1e8){
+    vec3 P=rd*ts; vec3 n=normalize(P-C);
+    float lat=dot(n,N);
+    vec3 tng=normalize(cross(N,vec3(0.,0.,1.)));
+    float lon=atan(dot(n,cross(N,tng)),dot(n,tng));
+    float w=fbm(vec2(lon*3.+uT*.004,lat*24.))*.06;
+    float bnd=n2(vec2((lat+w)*16.,0.))*.6+n2(vec2((lat+w)*46.,3.))*.4;
+    vec3 base=mix(vec3(.5,.34,.16),vec3(.78,.64,.4),bnd);
+    base=mix(base,vec3(.3,.34,.36),smoothstep(.72,.95,abs(lat)));
+    float dif=max(dot(n,L),0.);
+    vec3 pc=base*dif*2.1*(.65+.35*pow(max(dot(n,-rd),0.),.4));
+    float tl=dot(C-P,N)/dot(L,N);
+    if(tl>0.){ float kk=length(P+L*tl-C)/R; pc*=1.-.85*ringD(kk); }
+    pc+=vec3(.25,.2,.12)*pow(1.-max(dot(n,-rd),0.),3.)*dif*.6;
+    float pw=2./uRes.y*19./2.2;
+    float edge=smoothstep(0.,pw,b-sqrt(max(cc-0.,0.))*0.+sqrt(max(disc,0.)));
+    col=mix(col,pc,clamp(sqrt(max(disc,0.))/pw,0.,1.));
+    if(rden>0.&&tr<ts) col=mix(col,rcol,rden*.92);
+  } else if(rden>0.){
+    col=mix(col,rcol,rden*.92);
+  }
+  col+=vec3(.5,.42,.3)*exp(-length((uv-vec2(0.,.17))*vec2(1.,1.4))*7.)*.05*(.6+.8*uB);
+  vec2 g=uv*5.+vec2(uT*.012,uT*.004); vec2 id=floor(g);
+  vec2 f=fract(g)-.5-(h22(id+4.)-.5)*.5;
+  float hb=h12(id+9.);
+  col+=vec3(.75,.8,.9)*smoothstep(.09,.05,length(f))*step(.82,hb)*.05*smoothstep(.1,-.3,uv.y);
+  return col;
+}` },
+
+  orion: { q: .75, fs: `
+vec3 trap(vec2 p,vec2 s,float k){return spikeStar(p-s,k)*vec3(.82,.9,1.)*(.7+.45*uB);}
+vec3 scene(vec2 uv){
+  vec2 p=uv-vec2(0.,.15);
+  float t=uT*.012;
+  vec2 q=vec2(fbm(p*2.2+vec2(0.,t)),fbm(p*2.2+vec2(5.2,1.3)-t));
+  vec2 r=vec2(fbm(p*2.2+3.5*q+vec2(1.7,9.2)+t*.6),fbm(p*2.2+3.5*q+vec2(8.3,2.8)));
+  float f=fbm(p*2.2+3.*r);
+  float cg=exp(-length(p*vec2(1.,1.25))*3.);
+  float dens=pow(f,2.3)*(cg*3.+.35);
+  vec3 c=mix(vec3(.85,.08,.16),vec3(1.,.55,.22),smoothstep(.3,.9,q.x)*clamp(cg*2.2,0.,1.));
+  c=mix(c,vec3(.06,.5,.58),smoothstep(.45,.8,r.y)*(1.-cg)*.95);
+  c=mix(c,vec3(.15,.25,.85),smoothstep(.6,.9,q.y)*.35);
+  vec3 col=c*dens*1.7;
+  col+=vec3(1.,.82,.65)*(exp(-length(p)*13.)*1.1+exp(-length(p)*40.)*1.5)*(.75+.5*uB);
+  float dust=smoothstep(.46,.72,fbm(p*3.+vec2(-2.,4.)+r*.7));
+  col*=1.-dust*.88;
+  col+=stars(uv)*(1.-dust*.8);
+  col+=trap(p,vec2(-.006,.004),1.2)+trap(p,vec2(.008,.01),1.)+trap(p,vec2(.004,-.008),.9)+trap(p,vec2(.014,-.002),.7);
+  return col;
+}` },
+
+  pleiades: { q: .8, fs: `
+vec3 st(vec2 p,vec2 s,float k,inout float g){vec2 d=p-s;g+=k*exp(-length(d)*9.);return spikeStar(d,k)*vec3(.7,.82,1.)*(.75+.4*uB);}
+vec3 scene(vec2 uv){
+  vec2 p=(uv-vec2(.0,.17))*1.;
+  float g=0.; vec3 s=vec3(0.);
+  s+=st(p,vec2(.0,.0),1.6,g); s+=st(p,vec2(-.115,.012),1.3,g); s+=st(p,vec2(-.122,.04),.8,g);
+  s+=st(p,vec2(.095,.03),1.3,g); s+=st(p,vec2(.062,.07),1.2,g); s+=st(p,vec2(.06,-.035),1.15,g);
+  s+=st(p,vec2(.085,.105),1.,g);
+  vec2 rs=rot(.45)*p;
+  float w=fbm(p*5.+uT*.005);
+  float neb=fbm(vec2(rs.x*3.,rs.y*16.)+vec2(uT*.006,0.)+w*1.6);
+  neb=pow(neb,2.6)*2.4;
+  float fine=fbm(vec2(rs.x*9.,rs.y*44.)+w*2.);
+  vec3 col=vec3(.002,.004,.012)+stars(uv)*.85;
+  col+=vec3(.12,.3,1.)*neb*(g*.8+.08)*(.7+.6*fine)*(.85+.3*uB);
+  col+=s;
+  return col;
+}` },
+
+  trappist: { q: .85, fs: `
+vec3 planet(vec2 uv,vec2 c,float R,vec3 sp,vec3 base,inout float hit){
+  vec2 d=(uv-c)/R; float rr=length(d);
+  if(rr>1.)return vec3(0.);
+  vec3 n=vec3(d,sqrt(1.-rr*rr));
+  vec3 L=normalize(vec3(sp.xy-c,.25));
+  float tx=fbm(n.xy*4.+c*20.);
+  float dif=max(dot(n,L),0.);
+  vec3 col=base*(.6+.7*tx)*dif*2.+vec3(1.,.35,.2)*pow(1.-n.z,3.)*smoothstep(-.2,.4,dot(n,L))*.6;
+  hit=smoothstep(1.,1.-2./(R*uRes.y),rr);
+  return col;
+}
+vec3 scene(vec2 uv){
+  vec2 sp=vec2(.06,.045);
+  vec3 col=mix(vec3(.07,.012,.008),vec3(.004,.001,.003),smoothstep(-.05,.45,uv.y));
+  col+=stars(uv)*.6*smoothstep(.0,.3,uv.y);
+  float ls=length(uv-sp);
+  col+=vec3(1.,.22,.06)*(exp(-ls*9.)*.5+exp(-ls*28.)*.7)*(.85+.3*uB);
+  float sR=.045;
+  if(ls<sR){vec2 d=(uv-sp)/sR; float mu=sqrt(1.-dot(d,d));
+    float gran=fbm(d*9.+uT*.03);
+    col=vec3(1.,.28,.08)*(1.6+1.2*gran)*(.4+.6*mu)+vec3(1.,.5,.2)*pow(mu,3.);}
+  float hit=0.; vec3 pc;
+  float dr=uT*.0015;
+  pc=planet(uv,vec2(-.13+dr*.3,.29),.034,vec3(sp,0.),vec3(.25,.35,.42),hit); col=mix(col,pc,hit); hit=0.;
+  pc=planet(uv,vec2(.0+dr*.2,.35),.018,vec3(sp,0.),vec3(.4,.3,.22),hit); col=mix(col,pc,hit); hit=0.;
+  pc=planet(uv,vec2(.15+dr*.1,.24),.011,vec3(sp,0.),vec3(.35,.3,.3),hit); col=mix(col,pc,hit); hit=0.;
+  pc=planet(uv,vec2(-.05,.4),.008,vec3(sp,0.),vec3(.3,.32,.35),hit); col=mix(col,pc,hit);
+  float yh=-.02+.025*(fbm4(vec2(uv.x*4.,2.))-.5)+.012*fbm(vec2(uv.x*18.,5.));
+  if(uv.y<yh){
+    float dy=yh-uv.y, z=.4/max(dy,.001);
+    vec2 q=vec2(uv.x*z,z);
+    float ice=fbm(q*vec2(2.,.6));
+    vec3 g=vec3(.035,.02,.025)*(.6+.8*ice);
+    float refl=exp(-abs(uv.x-sp.x)*(18.+dy*60.))*(.5+.8*fbm(vec2(uv.x*60.,z*3.)));
+    g+=vec3(1.,.25,.08)*refl*.45*smoothstep(.0,.05,dy)*(.85+.3*uB);
+    g+=vec3(.9,.2,.08)*exp(-dy*120.)*.15;
+    col=mix(col,g,smoothstep(0.,1.5/uRes.y,dy));
+  }
+  return col;
+}` },
+
+  pillars: { q: .75, fs: `
+float pil(vec2 p,float x0,float top,float w0,float lean){
+  float cx=x0+lean*(p.y-top);
+  float w=w0*(1.+(top-p.y)*1.1);
+  float d=abs(p.x-cx)-w;
+  if(p.y>top)d=length(vec2(p.x-cx,(p.y-top)*1.25))-w0*1.05;
+  return d;
+}
+float pd3(vec2 q){return min(min(pil(q,-.105,.22,.045,.09),pil(q,.085,.07,.034,-.06)),pil(q,.2,-.06,.028,-.03));}
+vec2 warpP(vec2 p){return p+(vec2(fbm(p*4.),fbm(p*4.+5.))-.5)*.09+(vec2(fbm4(p*17.+2.),fbm4(p*17.+7.))-.5)*.028;}
+vec3 scene(vec2 uv){
+  vec2 p=uv;
+  float t=uT*.006;
+  float h1=fbm(p*2.2+vec2(t,0.)),h2=fbm(p*4.5+vec2(0.,-t)+h1*1.5);
+  vec3 col=mix(vec3(.01,.045,.06),vec3(.12,.3,.3),smoothstep(.25,.85,h2)*smoothstep(-.45,.35,p.y));
+  col+=vec3(.5,.36,.14)*pow(h1,2.5)*1.4*smoothstep(-.05,.45,p.y);
+  col+=vec3(.45,.6,.55)*exp(-length(p-vec2(.05,.6))*2.6)*.4;
+  col+=stars(uv)*.5;
+  vec2 pd=warpP(p);
+  float d=pd3(pd);
+  float dUp=pd3(warpP(p+vec2(0.,.008)));
+  float lit=clamp((dUp-d)/.008*.8+.25,0.,1.);
+  float tex=fbm(pd*11.);
+  float wisp=fbm(vec2(p.x*26.,p.y*9.-uT*.03));
+  if(d<.004){
+    float depth=clamp(-d*22.,0.,1.);
+    vec3 inner=mix(vec3(.018,.008,.0035),vec3(.002,.001,.0006),depth)*(.3+1.4*tex*tex);
+    inner+=vec3(1.,.58,.24)*exp(d*160.)*lit*lit*(.2+1.3*tex)*1.6;
+    col=mix(col,inner,smoothstep(.004,-.004,d));
+  }
+  col+=vec3(.9,.65,.35)*exp(-max(d,0.)*45.)*step(0.,d)*wisp*wisp*lit*.6;
+  col+=spikeStar(p-vec2(-.105,.27),.8)*vec3(1.,.9,.75)*(.35+.7*uB);
+  col+=spikeStar(p-vec2(.085,.108),.55)*vec3(1.,.9,.8)*(.35+.6*uB);
+  return col;
+}` },
+
+  crab: { q: .8, fs: `
+vec3 scene(vec2 uv){
+  vec2 c=vec2(0.,.15);
+  vec2 p=rot(.5)*(uv-c); p*=vec2(1.,1.35);
+  float r=length(p),a=atan(p.y,p.x);
+  vec2 ca=vec2(cos(a),sin(a));
+  float env=smoothstep(.29,.13,r+.06*fbm(ca*3.+uT*.004));
+  float warp=fbm(ca*2.5+vec2(r*6.,-uT*.01));
+  float fil=pow(1.-abs(2.*n2(ca*9.+vec2(warp*5.,r*7.))-1.),7.);
+  float fil2=pow(1.-abs(2.*n2(ca*22.+vec2(warp*8.,r*16.+5.))-1.),12.);
+  vec3 col=stars(uv)*.8;
+  vec3 fc=mix(vec3(1.,.18,.06),vec3(1.,.62,.32),fbm(p*10.));
+  col+=fc*(fil*.9+fil2*.7)*env*smoothstep(.02,.12,r)*1.3;
+  col+=vec3(.22,.38,1.)*exp(-r*8.)*(.4+fbm(p*7.+uT*.006))*1.3*(.8+.4*uB);
+  vec2 pp=uv-c; float pr=length(pp), ang=atan(pp.y,pp.x);
+  float beam=pow(abs(cos(ang-uT*.35)),500.);
+  col+=vec3(.55,.72,1.)*beam*exp(-pr*4.5)*(.35+.9*uB)*smoothstep(0.,.01,pr);
+  col+=vec3(.85,.9,1.)*(exp(-pr*pr*60000.)*5.+.003/(pr+.003)*.35)*(.5+.9*uB);
+  for(int i=0;i<3;i++){float ph=fract(uT/10.+float(i)/3.);col+=vec3(.5,.6,1.)*exp(-abs(r-ph*.45)*90.)*(1.-ph)*.12;}
+  return col;
+}` },
+
+  blackhole: { q: .6, fs: `
+vec3 bg(vec3 d){vec2 s=vec2(atan(d.x,d.z),asin(clamp(d.y,-1.,1.)));
+  float mw=exp(-abs(s.y+s.x*.3-.1)*5.)*fbm(s*4.);
+  return starL(s*.6,190.,.06,1.)*.35+starL(s*.6,70.,.06,2.)*.6+vec3(.12,.08,.05)*mw*.6;}
+vec3 scene(vec2 uv){
+  vec2 sc=uv-vec2(0.,.15);
+  vec3 ro=vec3(0.,2.6,-26.);
+  vec3 fw=normalize(-ro), rt=normalize(cross(vec3(0.,1.,0.),fw)), up=cross(fw,rt);
+  vec3 v=normalize(fw*.62+rt*sc.x+up*sc.y);
+  vec3 p=ro; vec3 hc=cross(p,v); float h2=dot(hc,hc);
+  vec3 acc=vec3(0.); float al=0.;
+  for(int i=0;i<120;i++){
+    float r=length(p);
+    float dt=clamp(.09*r,.05,1.3);
+    v=normalize(v-1.5*h2*p/pow(r,5.)*dt);
+    vec3 pn=p+v*dt;
+    if(p.y*pn.y<0.){
+      vec3 hp=mix(p,pn,p.y/(p.y-pn.y)); float hr=length(hp.xz);
+      if(hr>2.6&&hr<12.){
+        vec2 q=rot(-uT*1.1/pow(hr,1.5))*hp.xz;
+        float tex=fbm(q*.9+vec2(hr*2.,0.))*.7+n2(vec2(hr*22.,0.))*.45;
+        float temp=pow(2.6/hr,1.2);
+        vec3 dc=mix(vec3(1.,.28,.07),vec3(1.,.86,.62),temp)*temp*3.;
+        float dop=1.+.6*dot(normalize(vec3(-hp.z,0.,hp.x)),-v);
+        dc*=pow(dop,3.)*.55*(.85+.3*uB);
+        float a=clamp(tex*1.5-.1,0.,1.)*smoothstep(2.6,3.1,hr)*smoothstep(12.,6.5,hr);
+        acc+=(1.-al)*dc*a; al+=(1.-al)*a;
+      }
+    }
+    p=pn;
+    if(dot(p,p)<1.){al=1.;break;}
+    if(r>40.)break;
+    if(al>.98)break;
+  }
+  acc+=(1.-al)*bg(v);
+  return acc;
+}` },
+
+  andromeda: { q: .8, fs: `
+vec3 scene(vec2 uv){
+  vec2 p=uv-vec2(0.,.17);
+  p=rot(.62)*p;
+  vec2 g=p/vec2(1.,.3);
+  float r=length(g), th=atan(g.y,g.x)-uT*.004;
+  float sp=2.*(th-log(r+.002)*2.3);
+  float arm=pow(.5+.5*cos(sp),2.);
+  float disk=exp(-r*8.);
+  float n=fbm(g*16.+vec2(uT*.002,0.));
+  float dens=disk*(.3+.95*arm*(.55+.7*n));
+  vec3 col=stars(uv);
+  vec3 gc=mix(vec3(1.,.82,.6),vec3(.5,.62,1.),smoothstep(.05,.25,r)*arm);
+  col+=gc*dens*2.4;
+  float lane=pow(.5+.5*cos(sp+1.3),6.)*smoothstep(.03,.09,r)*exp(-r*4.5);
+  col*=1.-clamp(lane*(.5+.7*fbm(g*28.))*1.3*(p.y<0.?1.:.55),0.,.88);
+  vec2 kg=g*55.; vec2 id=floor(kg);
+  if(h12(id)>.9){vec2 f=fract(kg)-.5-(h22(id)-.5)*.6;
+    col+=mix(vec3(.55,.68,1.),vec3(1.,.5,.6),step(.96,h12(id+1.)))*exp(-dot(f,f)*50.)*arm*disk*5.;}
+  vec2 bp=p/vec2(1.,.62); float br=length(bp);
+  col+=vec3(1.,.84,.6)*(exp(-br*42.)*2.6+exp(-br*13.)*.55)*(.85+.3*uB);
+  col+=vec3(1.,.9,.75)*exp(-length(uv-vec2(.06,.085))*95.)*.8;
+  col+=vec3(1.,.9,.8)*exp(-length((uv-vec2(-.12,.31))*vec2(1.,1.7))*45.)*.3;
+  return col;
+}` },
+
+  deepfield: { q: .8, fs: `
+vec3 gal(vec2 p,float sc,float seed){
+  vec2 g=p*sc,id=floor(g),f=fract(g)-.5;
+  float h=h12(id+seed); if(h>.5)return vec3(0.);
+  vec2 d=f-(h22(id+seed)-.5)*.45;
+  d=rot(h12(id+seed+2.)*6.28)*d;
+  d.y/=.25+.75*h12(id+seed+3.);
+  float size=.05+.13*pow(h12(id+seed+4.),2.);
+  float l=length(d)/size, ty=h12(id+seed+5.);
+  vec3 c;
+  if(ty<.4){float th=atan(d.y,d.x);float arm=.5+.5*cos(2.*th-log(l+.01)*4.);
+    c=mix(vec3(1.,.82,.58),vec3(.5,.65,1.),smoothstep(.2,1.,l))*(exp(-l*3.)*(.4+arm*.9)+exp(-l*12.)*2.);}
+  else if(ty<.85){c=vec3(1.,.74,.48)*exp(-l*l*2.5)*1.4;}
+  else{c=vec3(1.,.32,.18)*exp(-l*l*3.)*1.2;}
+  return c*.7;
+}
+vec3 scene(vec2 uv){
+  vec3 col=vec3(.002,.002,.005);
+  float s=fract(uT*.006);
+  for(int i=0;i<4;i++){
+    float z=(float(i)+1.-s)/4.;
+    float sc=2.5*pow(2.,z*5.);
+    float w=smoothstep(0.,.3,z)*smoothstep(1.,.75,z);
+    col+=gal(uv+vec2(float(i)*.37,float(i)*.19),sc,float(i)*13.)*w;
+  }
+  col+=spikeStar(uv-vec2(-.09,.27),1.1)*vec3(1.,.95,.85)*(.6+.4*uB);
+  col+=spikeStar(uv-vec2(.13,.05),.7)*vec3(.9,.95,1.)*(.6+.4*uB);
+  col+=stars(uv)*.25;
+  return col;
+}` },
+
+  cmb: { q: .75, fs: `
+vec3 ramp(float f){
+  vec3 c=mix(vec3(.01,.03,.22),vec3(.15,.45,1.),smoothstep(.3,.44,f));
+  c=mix(c,vec3(1.,.95,.85),smoothstep(.44,.52,f));
+  c=mix(c,vec3(1.,.5,.12),smoothstep(.52,.6,f));
+  c=mix(c,vec3(.6,.06,.03),smoothstep(.6,.72,f));
+  return c;
+}
+vec3 scene(vec2 uv){
+  vec2 c=vec2(0.,.19);
+  vec2 d=(uv-c)/vec2(.15,.15);
+  float rr=dot(d,d);
+  vec3 col=stars(uv)*.7;
+  float halo=exp(-max(sqrt(rr)-1.,0.)*3.);
+  col+=vec3(.9,.6,.4)*halo*.1*(.7+.6*uB);
+  if(rr<1.){
+    vec3 n=vec3(d,sqrt(1.-rr));
+    n.xz=rot(uT*.01)*n.xz;
+    float f=fbm3(n*3.)*.55+fbm3(n*8.+4.)*.3+n3(n*30.)*.15;
+    f+=(uB-.5)*.08;
+    vec3 sh=ramp(f)*(.2+.8*pow(1.-rr,.35))*.9;
+    col=mix(col,sh,smoothstep(1.,.99,rr));
+    col+=vec3(1.,.8,.6)*pow(rr,6.)*.25;
+  }
+  return col;
+}` },
+};
+const GLSL_MAIN = `
+uniform vec2 uShift; uniform float uDim;
+void main(){
+  vec2 sp=(gl_FragCoord.xy-.5*uRes)/uRes.y;
+  vec3 c=max(scene(sp-uShift),0.);
+  c=1.-exp(-c*1.15);
+  c=pow(c,vec3(.4545));
+  c*=1.-.35*pow(length(sp*vec2(1.6,1.)),2.2);
+  c*=uDim;
+  c+=(h12(gl_FragCoord.xy+fract(uT)*91.)-.5)/180.;
+  gl_FragColor=vec4(c,1.);
+}`;
+
+// 各页面下背景的状态：速度、亮度、帧率、画面上下偏移
+const SPACE_MODES = {
+  home: { speed: 1, dim: 1, fps: 30, shift: 0.06 },
+  session: { speed: 0.5, dim: 0.8, fps: 24, shift: 0.04 },
+  done: { speed: 0.6, dim: 0.75, fps: 24, shift: 0.06 },
+  page: { speed: 0.4, dim: 1, fps: 10, shift: 0.06 },
+};
+
+const Space = (() => {
+  let canvas, overlay, gl, o2, buf;
+  let w = 0, h = 0, dpr = 1, scale = 0, quality = 1;
+  let cur = null, warp = null, last = 0, lastRaf = 0, slow = 0, running = false;
+  let t = 20, mode = SPACE_MODES.home, dim = 1, shift = mode.shift, breath = null;
+  let progs = {};
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const VERT = 'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}';
+  const streaks = Array.from({ length: 160 }, () => ({ a: Math.random() * 7, d: Math.random() }));
+
+  function compile(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+    return s;
+  }
+
+  function prog(id) {
+    if (progs[id]) return progs[id];
+    const p = gl.createProgram();
+    gl.attachShader(p, compile(gl.VERTEX_SHADER, VERT));
+    gl.attachShader(p, compile(gl.FRAGMENT_SHADER, GLSL_HEAD + SCENES[id].fs + GLSL_MAIN));
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    const u = n => gl.getUniformLocation(p, n);
+    return (progs[id] = { p, a: gl.getAttribLocation(p, 'a'), res: u('uRes'), t: u('uT'), b: u('uB'), shift: u('uShift'), dim: u('uDim') });
+  }
+
+  function setupGL() {
+    progs = {};
+    buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  }
+
+  function size() {
+    dpr = Math.min(devicePixelRatio || 1, 2);
+    w = innerWidth; h = innerHeight; scale = 0;
+    overlay.width = Math.round(w * dpr); overlay.height = Math.round(h * dpr);
+  }
+
+  // 4 秒吸、6 秒呼；呼吸模式下改用练习里的真实节奏
+  function breathNow(now) {
+    if (breath !== null) return breath;
+    const c = (now / 1000) % 10;
+    return c < 4 ? (1 - Math.cos(c / 4 * Math.PI)) / 2 : (1 + Math.cos((c - 4) / 6 * Math.PI)) / 2;
+  }
+
+  function draw(id, b) {
+    const s = dpr * SCENES[id].q * quality;
+    if (Math.abs(s - scale) > 1e-3) { scale = s; canvas.width = Math.round(w * s); canvas.height = Math.round(h * s); }
+    const P = prog(id);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.useProgram(P.p);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.enableVertexAttribArray(P.a);
+    gl.vertexAttribPointer(P.a, 2, gl.FLOAT, false, 0, 0);
+    gl.uniform2f(P.res, canvas.width, canvas.height);
+    gl.uniform1f(P.t, t);
+    gl.uniform1f(P.b, b);
+    gl.uniform2f(P.shift, 0, shift);
+    gl.uniform1f(P.dim, dim);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  function frame(now) {
+    if (!running) return;
+    requestAnimationFrame(frame);
+    // 显卡跟不上时（帧间隔持续偏长）自动降低分辨率
+    if (lastRaf && !document.hidden) {
+      const gap = now - lastRaf;
+      slow = gap > 45 && gap < 500 ? slow + 1 : Math.max(0, slow - 1);
+      if (slow > 40 && quality > 0.5) { quality *= 0.85; slow = 0; }
+    }
+    lastRaf = now;
+    if (document.hidden || now - last < 1000 / mode.fps - 4) return;
+    const dt = Math.min(0.2, (now - last) / 1000);
+    last = now;
+    if (!reduce) t = (t + dt * mode.speed) % 3600;
+    dim += (mode.dim - dim) * Math.min(1, dt * 3);
+    shift += (mode.shift - shift) * Math.min(1, dt * 3);
+    if (!w) size();
+    const b = breathNow(now);
+    try {
+      o2.setTransform(dpr, 0, 0, dpr, 0, 0);
+      o2.clearRect(0, 0, w, h);
+      if (!warp) { draw(cur, b); return; }
+      const p = (now - warp.start) / 1300;
+      if (p >= 0.5 && cur !== warp.to) { cur = warp.to; if (warp.onMid) warp.onMid(); }
+      draw(cur, b);
+      const k = p < 0.5 ? p / 0.5 : Math.max(0, 1 - (p - 0.5) / 0.5);
+      o2.fillStyle = `rgba(2,3,8,${Math.min(1, k * 1.25)})`;
+      o2.fillRect(0, 0, w, h);
+      const cx = w / 2, cy = h * 0.32;
+      o2.lineCap = 'round';
+      for (const s of streaks) {
+        const r0 = (s.d * 0.4 + k * 0.3) * h, len = k * k * h * 0.35 * (0.4 + s.d);
+        o2.strokeStyle = `rgba(200,220,255,${k * (0.3 + s.d * 0.6)})`;
+        o2.lineWidth = 0.6 + s.d;
+        o2.beginPath();
+        o2.moveTo(cx + Math.cos(s.a) * r0, cy + Math.sin(s.a) * r0);
+        o2.lineTo(cx + Math.cos(s.a) * (r0 + len), cy + Math.sin(s.a) * (r0 + len));
+        o2.stroke();
+      }
+      if (p >= 1) warp = null;
+    } catch (e) {
+      fail(e);
+    }
+  }
+
+  function fail(e) {
+    console.error('space background off:', e);
+    running = false;
+    document.body.classList.remove('space-on');
+  }
+
+  return {
+    // 成功返回 true；手机不支持 WebGL 时返回 false，界面退回原来的极光背景
+    start(id) {
+      if (running) { cur = id; return true; }
+      if (!canvas) {
+        canvas = document.createElement('canvas');
+        canvas.className = 'space';
+        overlay = document.createElement('canvas');
+        overlay.className = 'space space-warp';
+        document.body.prepend(canvas, overlay);
+        gl = canvas.getContext('webgl', { antialias: false, alpha: false, depth: false, powerPreference: 'low-power' });
+        o2 = overlay.getContext('2d');
+        if (!gl) return false;
+        setupGL();
+        canvas.addEventListener('webglcontextlost', e => e.preventDefault());
+        canvas.addEventListener('webglcontextrestored', () => { setupGL(); scale = 0; });
+        addEventListener('resize', () => { w = 0; });
+      }
+      if (!gl) return false;
+      cur = id;
+      try { prog(id); } catch (e) { fail(e); return false; }
+      running = true;
+      document.body.classList.add('space-on');
+      requestAnimationFrame(frame);
+      return true;
+    },
+    stop() {
+      running = false;
+      document.body.classList.remove('space-on');
+    },
+    go(id, onMid) {
+      if (!running || (id === cur && !warp)) { if (onMid) onMid(); return; }
+      try { prog(id); } catch (e) { fail(e); if (onMid) onMid(); return; }
+      warp = { start: performance.now(), to: id, onMid };
+    },
+    mode(name) { mode = SPACE_MODES[name] || SPACE_MODES.home; },
+    breath(b) { breath = b; },
+    get on() { return running; },
+  };
+})();

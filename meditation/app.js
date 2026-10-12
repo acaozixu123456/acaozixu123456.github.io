@@ -6,7 +6,7 @@ const LOG_KEY = 'meditation.log.v1';
 const SETTINGS_KEY = 'meditation.settings.v1';
 const DEFAULTS = {
   minutes: 10, interval: 0, prep: true, wake: true, volume: 0.7,
-  mode: 'timer', pattern: '478', sound: 'none', noiseVolume: 0.5, focus: true, theme: 'dark', cue: 'tone',
+  mode: 'timer', pattern: '478', sound: 'none', noiseVolume: 0.5, focus: true, theme: 'dark', cue: 'tone', bg: 'space',
 };
 const PREP_SEC = 10;
 const MIN_SAVE_SEC = 60;
@@ -803,6 +803,7 @@ function stopEarly() {
 
 function finish(completed, now = Date.now()) {
   const wasPrep = timer.phase === 'prep';
+  const openBefore = openPlaces(travelStats(log));
   const elapsed = completed ? timer.plannedMs : elapsedMs(now);
   const healthy = audioClockHealthy(now);
   clearInterval(timer.tickId);
@@ -820,6 +821,7 @@ function finish(completed, now = Date.now()) {
     unschedule();
   }
   timer.phase = 'idle';
+  Space.breath(null);
   stopNoise(completed ? 8 : 2);
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   clearTimeout(focus.stirTimer);
@@ -841,6 +843,7 @@ function finish(completed, now = Date.now()) {
     const entry = { start: timer.startedAt, sec, planned: Math.round(timer.plannedMs / 1000) };
     if (timer.mode === 'breath') entry.mode = 'breath';
     if (focus.on) entry.distractions = focus.count;
+    entry.place = travel.here;
     log.push(entry);
     saveLog();
   }
@@ -859,6 +862,7 @@ function finish(completed, now = Date.now()) {
   const s = stats();
   $('done-title').textContent = completed ? '完成' : '已结束';
   $('done-detail').textContent = `这次${timer.mode === 'breath' ? '呼吸练习' : ''} ${formatDuration(sec)}，已连续 ${s.streak} 天`;
+  $('done-travel').textContent = savedEntry ? doneTravelText(openBefore, sec) : '';
   $('done-focus').textContent = focusSummary();
   $('done-focus').className = `focus center${focus.on && focus.count === 0 ? ' clean' : ''}`;
   const messy = focus.on && focus.count > 0;
@@ -866,6 +870,38 @@ function finish(completed, now = Date.now()) {
   $('done-cat').classList.toggle('messy', messy);
   $('done-cat').classList.toggle('awake', messy);
   show('done');
+}
+
+/* ---------- 星旅 ---------- */
+
+function doneTravelText(openBefore, sec) {
+  const st = travelStats(log);
+  const fresh = openPlaces(st).filter(id => !openBefore.includes(id));
+  if (fresh.length) return `${fresh.map(id => PLACE[id].name).join('、')}已点亮，去星图看看`;
+  const here = `在${PLACE[travel.here].name}潜修 ${Math.max(1, Math.round(sec / 60))} 分钟`;
+  const next = travelProgressText(st);
+  return next ? `${here}，${next}` : here;
+}
+
+function travelTo(id) {
+  travel.here = id;
+  saveTravel();
+  renderHome();
+  show('home');
+  Space.go(id);
+}
+
+function openStarmap() {
+  const y = renderStarmap(log, settings.focus);
+  show('starmap');
+  // 把小猫所在的地方滚到屏幕中间
+  window.scrollTo(0, Math.max(0, $('sm-route').offsetTop + y - innerHeight * 0.45));
+}
+
+function applyBackground() {
+  const space = settings.bg !== 'aurora' && Space.start(travel.here);
+  if (!space) Space.stop();
+  applyTheme();
 }
 
 /* ---------- 界面 ---------- */
@@ -876,7 +912,9 @@ const RING_LEN = 2 * Math.PI * 90;
 function show(id) {
   for (const el of document.querySelectorAll('.screen')) el.classList.toggle('active', el.id === id);
   window.scrollTo(0, 0);
-  if (id === 'stats' || id === 'settings' || id === 'wardrobe') stopNoise(0.8);
+  if (id === 'stats' || id === 'settings' || id === 'wardrobe' || id === 'starmap') stopNoise(0.8);
+  Space.mode(id === 'home' || id === 'session' || id === 'done' ? id : 'page');
+  document.body.dataset.screen = id;
 }
 
 function formatClock(ms) {
@@ -952,6 +990,7 @@ function renderBreath(now = Date.now()) {
   const b = (st.scale - ORB_MIN) / (ORB_MAX - ORB_MIN);
   orb.style.opacity = String(0.35 + 0.4 * b);
   $('stage').style.setProperty('--b', b.toFixed(3));
+  Space.breath(b);
   if ($('time').textContent !== st.label) $('time').textContent = st.label;
   const count = String(st.count);
   if ($('sub').textContent !== count) $('sub').textContent = count;
@@ -980,6 +1019,8 @@ function renderHome() {
   if (s.todayMin) parts.push(`今天 ${s.todayMin} 分钟`);
   $('summary').textContent = parts.length ? parts.join(' · ') : (log.length ? '今天还没开始' : '');
   $('fish-count').textContent = fishBalance(log);
+  $('place-tag').textContent = PLACE[travel.here].name;
+  $('open-map').classList.toggle('dot', hasNewPlace(travelStats(log)));
   const mood = catMood(log);
   const cat = $('home-cat');
   cat.classList.toggle('lonely', mood === 'lonely');
@@ -1040,6 +1081,8 @@ function renderSettings() {
   $('prep').checked = settings.prep;
   $('wake').checked = settings.wake;
   $('theme').value = settings.theme;
+  $('bg').value = settings.bg;
+  $('theme').disabled = Space.on;
   $('cue').value = settings.cue;
   $('focus-detect').checked = settings.focus;
   $('volume').value = String(settings.volume);
@@ -1195,6 +1238,12 @@ function renderStats(now = new Date()) {
       tag.textContent = '呼吸';
       when.append(tag);
     }
+    if (PLACE[e.place] && e.place !== 'moon') {
+      const tag = document.createElement('span');
+      tag.className = 'tag muted-tag';
+      tag.textContent = PLACE[e.place].name;
+      when.append(tag);
+    }
     if (e.distractions > 0) {
       const tag = document.createElement('span');
       tag.className = 'tag muted-tag';
@@ -1277,6 +1326,7 @@ async function importLog(file) {
       const entry = { start: e.start, sec: Math.round(e.sec), planned: Math.round(e.planned || e.sec) };
       if (e.mode === 'breath') entry.mode = 'breath';
       if (Number.isInteger(e.distractions) && e.distractions >= 0) entry.distractions = e.distractions;
+      if (PLACE[e.place]) entry.place = e.place;
       log.push(entry);
       known.add(e.start);
       added++;
@@ -1323,6 +1373,8 @@ $('open-stats').addEventListener('click', () => {
 });
 $('open-wardrobe').addEventListener('click', () => { buyArmed = null; renderWardrobe(); show('wardrobe'); });
 $('open-settings').addEventListener('click', () => { renderSettings(); show('settings'); });
+$('open-map').addEventListener('click', openStarmap);
+$('place-tag').addEventListener('click', openStarmap);
 for (const b of document.querySelectorAll('[data-back]')) {
   b.addEventListener('click', () => { renderHome(); show('home'); });
 }
@@ -1347,6 +1399,12 @@ $('cue').addEventListener('change', e => {
   if (settings.cue === 'voice') cueVoice('吸气');
 });
 $('theme').addEventListener('change', e => { settings.theme = e.target.value; saveSettings(); applyTheme(); });
+$('bg').addEventListener('change', e => {
+  settings.bg = e.target.value;
+  saveSettings();
+  applyBackground();
+  renderSettings();
+});
 $('focus-detect').addEventListener('change', e => {
   settings.focus = e.target.checked;
   saveSettings();
@@ -1400,18 +1458,21 @@ document.addEventListener('visibilitychange', () => {
   if ((timer.phase === 'prep' || timer.phase === 'running') && !audioClockHealthy()) schedule();
 });
 
+// 宇宙背景下始终用深色
 function applyTheme() {
-  document.documentElement.dataset.theme = settings.theme;
-  const light = settings.theme === 'light' || (settings.theme === 'auto' && matchMedia('(prefers-color-scheme: light)').matches);
+  const theme = Space.on ? 'dark' : settings.theme;
+  document.documentElement.dataset.theme = theme;
+  const light = theme === 'light' || (theme === 'auto' && matchMedia('(prefers-color-scheme: light)').matches);
   $('theme-color').content = light ? '#f4f1ea' : '#10131b';
 }
-applyTheme();
+applyBackground();
 matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', applyTheme);
 
 mountCats();
 applyWardrobe();
 setupHomeCat();
 renderHome();
+show('home');
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
