@@ -1,5 +1,5 @@
 // 改动任何文件后把版本号加一，手机上下次打开会自动更新缓存
-const CACHE = 'meditation-v17';
+const CACHE = 'meditation-v18';
 const ASSETS = [
   './',
   'index.html',
@@ -22,7 +22,7 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', event => {
@@ -39,12 +39,12 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     caches.open(CACHE).then(async cache => {
       const cached = await cache.match(event.request, { ignoreSearch: true });
-      const network = fetch(event.request)
+      const network = fetch(event.request, { cache: 'no-cache' })
         .then(res => {
           if (res.ok && new URL(event.request.url).origin === location.origin) cache.put(event.request, res.clone());
           return res;
         })
-        .catch(() => cached);
+        .catch(() => cached || (event.request.mode === 'navigate' ? cache.match('index.html') : Response.error()));
       return cached || network;
     })
   );

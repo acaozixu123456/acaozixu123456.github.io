@@ -900,7 +900,8 @@ const Space = (() => {
       if (slow > 20 && quality > 0.5) { quality *= 0.85; slow = 0; }
     }
     lastRaf = now;
-    if (document.hidden || now - last < 1000 / mode.fps - 4) return;
+    // 显卡资源被收回期间不画也不编译，免得报错后整个宇宙背景被关掉
+    if (document.hidden || gl.isContextLost() || now - last < 1000 / mode.fps - 4) return;
     const dt = Math.min(0.2, (now - last) / 1000);
     last = now;
     if (!reduce) { t = (t + dt * mode.speed) % 3600; rt = (rt + dt) % 3600; }
@@ -1034,9 +1035,9 @@ const Space = (() => {
       }
       if (!gl) return false;
       cur = id;
-      try { prog(id); } catch (e) { fail(e); return false; }
+      if (!gl.isContextLost()) try { prog(id); } catch (e) { fail(e); return false; }
       running = true;
-      document.body.classList.add('space-on');
+      if (!gl.isContextLost()) document.body.classList.add('space-on');
       requestAnimationFrame(frame);
       return true;
     },
@@ -1046,6 +1047,7 @@ const Space = (() => {
     },
     go(id, onMid) {
       if (!running || (id === cur && !warp)) { if (onMid) onMid(); return; }
+      if (gl.isContextLost()) { cur = id; if (onMid) onMid(); return; }
       try { prog(id); } catch (e) { fail(e); if (onMid) onMid(); return; }
       warp = { start: performance.now(), to: id, onMid };
     },

@@ -30,6 +30,7 @@ function save(key, value) {
 
 let settings = { ...DEFAULTS, ...load(SETTINGS_KEY, {}) };
 let log = load(LOG_KEY, []);
+if (!Array.isArray(log)) log = [];
 
 function saveSettings() { save(SETTINGS_KEY, settings); }
 function saveLog() {
@@ -97,6 +98,10 @@ function ensureAudio() {
     master = ctx.createGain();
     master.gain.value = settings.volume;
     master.connect(bus);
+    // 来电、闹钟、Siri 打断后音频时钟会停一阵；恢复时按真实时间重新排钟声
+    ctx.onstatechange = () => {
+      if (ctx.state === 'running' && (timer.phase === 'prep' || timer.phase === 'running') && !audioClockHealthy()) schedule();
+    };
   }
   if (ctx.state !== 'running') ctx.resume().catch(() => {});
   return ctx;
@@ -408,8 +413,12 @@ let wakeLock = null;
 async function requestWake() {
   if (!settings.wake || !('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
   try {
-    wakeLock = await navigator.wakeLock.request('screen');
-    wakeLock.addEventListener('release', () => { wakeLock = null; });
+    const lock = await navigator.wakeLock.request('screen');
+    // 申请期间练习可能已经结束（例如锁屏时到点，回来时才收尾），这时直接放掉，免得屏幕一直亮着
+    if (timer.phase === 'idle') { lock.release().catch(() => {}); return; }
+    if (wakeLock && wakeLock !== lock) wakeLock.release().catch(() => {});
+    wakeLock = lock;
+    lock.addEventListener('release', () => { if (wakeLock === lock) wakeLock = null; });
   } catch {
     wakeLock = null;
   }
@@ -542,6 +551,7 @@ function requestMotion() {
     motionListening = true;
     window.addEventListener('devicemotion', onMotion);
   };
+  if (motionGranted) { listen(); return; }
   if (typeof DeviceMotionEvent.requestPermission === 'function') {
     DeviceMotionEvent.requestPermission()
       .then(state => { if (state === 'granted') { motionGranted = true; listen(); } })
@@ -550,6 +560,13 @@ function requestMotion() {
     motionGranted = true;
     listen();
   }
+}
+
+// 练习结束就不再监听，首页上不白白耗电
+function stopMotion() {
+  if (!motionListening) return;
+  motionListening = false;
+  window.removeEventListener('devicemotion', onMotion);
 }
 
 function onMotion(e) {
@@ -843,6 +860,7 @@ function finish(completed, now = Date.now()) {
   stopNoise(completed ? 8 : 2);
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   clearTimeout(focus.stirTimer);
+  stopMotion();
   calm();
   document.body.classList.remove('in-session');
   // 等结束钟响完再停掉保活音
@@ -1649,18 +1667,20 @@ async function importLog(file) {
     const parsed = JSON.parse(await file.text());
     const incoming = Array.isArray(parsed) ? parsed : parsed.log;
     if (!Array.isArray(incoming)) throw new Error('bad format');
-    const known = new Set(log.map(e => e.start));
+    // 统一成 ISO 时间再比较、排序，带时区或别的写法的旧备份也不会排乱
+    const known = new Set(log.map(e => new Date(e.start).toISOString()));
     let added = 0;
     for (const e of incoming) {
       if (!e || typeof e.start !== 'string' || isNaN(Date.parse(e.start)) || !(e.sec > 0)) continue;
-      if (known.has(e.start)) continue;
-      const entry = { start: e.start, sec: Math.round(e.sec), planned: Math.round(e.planned || e.sec) };
+      const start = new Date(e.start).toISOString();
+      if (known.has(start)) continue;
+      known.add(start);
+      const entry = { start, sec: Math.round(e.sec), planned: Math.round(e.planned || e.sec) };
       if (e.mode === 'breath') entry.mode = 'breath';
       if (Number.isInteger(e.distractions) && e.distractions >= 0) entry.distractions = e.distractions;
       if (PLACE[e.place]) entry.place = e.place;
       if (SIGHT[e.sight]) entry.sight = e.sight;
       log.push(entry);
-      known.add(e.start);
       added++;
     }
     saveLog();
@@ -1745,6 +1765,8 @@ $('focus-detect').addEventListener('change', e => {
 
 // 计时中碰到屏幕（按钮除外）
 $('session').addEventListener('pointerdown', e => {
+  // 音频被打断后，借这次触摸把它唤回来
+  if (ctx && ctx.state !== 'running') ctx.resume().catch(() => {});
   if (!e.target.closest('button')) disturb('touch');
 });
 $('volume').addEventListener('input', e => {
@@ -1789,8 +1811,8 @@ document.addEventListener('visibilitychange', () => {
   focus.hiddenAt = 0;
   // 回到前台：恢复音频、重新申请常亮、按真实时间校正
   ensureAudio();
-  requestWake();
   tick();
+  if (timer.phase !== 'idle') requestWake();
   if ((timer.phase === 'prep' || timer.phase === 'running') && !audioClockHealthy()) schedule();
 });
 

@@ -32,6 +32,7 @@ const PLACE = Object.fromEntries(PLACES.map(p => [p.id, p]));
 // here：小猫现在在哪；seen：星图上已经看过的解锁（没看过的显示“新”）
 let travel = { here: 'moon', seen: ['moon'], ...loadTravel() };
 if (!PLACE[travel.here]) travel.here = 'moon';
+if (!Array.isArray(travel.seen)) travel.seen = ['moon'];
 
 function loadTravel() {
   try {
