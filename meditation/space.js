@@ -124,7 +124,7 @@ vec3 sightFx(vec2 uv){
 }
 `;
 const SCENES = {
-  moon: { q: .7, ground: -0.07, shadow: 1, fs: `
+  moon: { q: .62, ground: -0.07, shadow: 1, fs: `
 float crater(vec2 q,float sc,float seed,float dens){
   vec2 g=q*sc,id=floor(g),f=fract(g);float h=0.;
   for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){
@@ -140,7 +140,32 @@ float crater(vec2 q,float sc,float seed,float dens){
   return h/sc;
 }
 float moonH(vec2 q){return fbm4(q*2.5)*.05+n2(q*14.)*.012+crater(q,.7,1.,.4)*.75+crater(q,2.2,7.,.55)*.8+crater(q,7.,3.,.6)*.7;}
+// 月面地面：远处只用平均亮度，省掉最贵的环形山计算
+vec3 moonGround(vec2 uv,float yh){
+    vec3 Lg=normalize(vec3(-.8,.3,.5));
+    vec3 gf=vec3(1.,.96,.9)*.13*Lg.y*3.6;
+    float dy=max(yh-uv.y,.0012);
+    float z=.5/dy;
+    if(z>26.)return gf;
+    vec2 q=vec2(uv.x*z,z)*4.;
+    float e=.006+.002*z;
+    float h0=moonH(q),hx=moonH(q+vec2(e,0.)),hz=moonH(q+vec2(0.,e));
+    vec3 n=normalize(vec3(-(hx-h0)/e,1.,-(hz-h0)/e));
+    float dif=max(dot(n,Lg),0.);
+    float alb=.09+.07*fbm4(q*.25+9.)+.03*n2(q*30.);
+    vec3 g=vec3(1.,.96,.9)*alb*dif*3.4+.0015;
+    // 阳光照到细小的玻璃珠时一闪一闪
+    vec2 gq=q*9.; vec2 gi=floor(gq);
+    float gh=h12(gi+31.);
+    float gl=step(.93,gh)*pow(max(sin(uR*(1.+gh*3.)+gh*80.),0.),14.)*exp(-dot(fract(gq)-.5,fract(gq)-.5)*40.);
+    g+=vec3(1.,.97,.9)*gl*dif*.7*smoothstep(14.,3.,z);
+    return mix(g,gf,smoothstep(5.,26.,z));
+}
 vec3 scene(vec2 uv){
+  float yh=-.07-.22*uv.x*uv.x+.004*fbm4(vec2(uv.x*14.,1.));
+  float py=1./uRes.y;
+  // 完全在地面以下的像素不用再画星空和地球
+  if(uv.y<yh-py)return moonGround(uv,yh);
   vec3 col=stars(uv)*.9;
   vec3 L=uSun.w>.5?normalize(uSun.xyz):normalize(vec3(-.9,.28,.4));
   vec2 c=vec2(.11,.15+.008*sin(uT*.05)); float R=.095;
@@ -186,8 +211,6 @@ vec3 scene(vec2 uv){
     lit+=vec3(.7,.8,1.)*exp(-dot(n-lp,n-lp)*900.)*cl*step(.55,h12(vec2(ls,4.)))*(1.-lf)*(1.-smoothstep(-.1,.05,nl))*1.2;
     col=mix(col,lit,smoothstep(1.,1.-pw*1.5,rr));
   }
-  float yh=-.07-.22*uv.x*uv.x+.004*fbm4(vec2(uv.x*14.,1.));
-  float py=1./uRes.y;
   // 月平线上一层被太阳照亮的浮尘辉光，缓缓起伏
   float ah=uv.y-yh;
   col+=vec3(.55,.6,.75)*exp(-max(ah,0.)*40.)*(.02+.018*sin(uR*.25+uv.x*3.))*smoothstep(.5,-.3,uv.x);
@@ -204,23 +227,7 @@ vec3 scene(vec2 uv){
     col+=vec3(.55,.53,.5)*pl*.35;
   }
   if(uv.y<yh+py){
-    float dy=max(yh-uv.y,.0012);
-    float z=.5/dy;
-    vec2 q=vec2(uv.x*z,z)*4.;
-    float e=.006+.002*z;
-    float h0=moonH(q),hx=moonH(q+vec2(e,0.)),hz=moonH(q+vec2(0.,e));
-    vec3 n=normalize(vec3(-(hx-h0)/e,1.,-(hz-h0)/e));
-    vec3 Lg=normalize(vec3(-.8,.3,.5));
-    float dif=max(dot(n,Lg),0.);
-    float alb=.09+.07*fbm4(q*.25+9.)+.03*n2(q*30.);
-    vec3 g=vec3(1.,.96,.9)*alb*dif*3.4+.0015;
-    vec3 gf=vec3(1.,.96,.9)*.13*Lg.y*3.6;
-    // 阳光照到细小的玻璃珠时一闪一闪
-    vec2 gq=q*9.; vec2 gi=floor(gq);
-    float gh=h12(gi+31.);
-    float gl=step(.93,gh)*pow(max(sin(uR*(1.+gh*3.)+gh*80.),0.),14.)*exp(-dot(fract(gq)-.5,fract(gq)-.5)*40.);
-    g+=vec3(1.,.97,.9)*gl*dif*.7*smoothstep(14.,3.,z);
-    g=mix(g,gf,smoothstep(5.,26.,z));
+    vec3 g=moonGround(uv,yh);
     col=mix(col,g,smoothstep(yh+py,yh-py,uv.y));
   }
   return col;
@@ -244,11 +251,11 @@ vec3 scene(vec2 uv){
     vec2 ed=(uv-ec)/vec2(.0085,.0068);
     if(dot(ed,ed)<1.)sky=vec3(.01,.007,.006)+vec3(.04,.03,.025)*smoothstep(-.2,.8,-ed.x);
   }
-  float hz=fbm(vec2(uv.x*2.5-uT*.008,uv.y*16.));
+  float hz=fbm4(vec2(uv.x*2.5-uT*.008,uv.y*16.));
   sky+=vec3(.16,.07,.03)*hz*smoothstep(.28,-.02,uv.y)*.8;
   sky+=stars(uv)*smoothstep(.12,.35,uv.y)*.55;
   // 高空的薄云，慢慢飘
-  float cl=fbm(vec2(uv.x*2.6-uT*.012,uv.y*11.+uT*.004));
+  float cl=fbm4(vec2(uv.x*2.6-uT*.012,uv.y*11.+uT*.004));
   sky+=vec3(.55,.6,.7)*pow(cl,3.5)*smoothstep(.06,.18,uv.y)*smoothstep(.42,.22,uv.y)*.45;
   // 远处沙丘上游走的尘卷风
   for(int j=0;j<2;j++){
@@ -259,7 +266,7 @@ vec3 scene(vec2 uv){
       float wdt=.008+hy*.16;
       float sw=.015*sin(hy*24.-uT*1.2+fj*3.);
       float dd=abs(uv.x-dx-sw)/wdt;
-      float tw=fbm(vec2((uv.x-dx)*60.+hy*50.-uT*3.,hy*24.-uT*.8));
+      float tw=fbm4(vec2((uv.x-dx)*60.+hy*50.-uT*3.,hy*24.-uT*.8));
       float dv=exp(-dd*dd*2.5)*(.35+.9*tw)*smoothstep(.15,.03,hy)*smoothstep(0.,.025,hy);
       vec3 dcol=mix(vec3(.3,.15,.07),vec3(.62,.36,.2),smoothstep(-.5,.5,(uv.x-dx)*sign(sp.x-dx)/wdt));
       sky=mix(sky,dcol,clamp(dv*.6,0.,1.)*(.65+.35*sin(uT*.07+fj*2.)));
@@ -277,7 +284,7 @@ vec3 scene(vec2 uv){
       float depth=1.-fi/3.;
       float dd=y-uv.y;
       vec3 dune=mix(vec3(.022,.007,.003),vec3(.13,.05,.02),depth);
-      float rip=fbm(vec2(x*55.+dd*90.,dd*26.+fi));
+      float rip=fbm4(vec2(x*55.+dd*90.,dd*26.+fi));
       dune*=.75+.5*rip*(1.-depth*.6);
       float rim=exp(-dd*(150.-fi*25.))*exp(-abs(uv.x-sp.x)*2.5);
       dune+=vec3(.75,.38,.18)*rim*(.35+.2*(1.-depth));
@@ -286,7 +293,7 @@ vec3 scene(vec2 uv){
     }
   }
   // 贴着地面被风吹过的细沙
-  float sd=fbm(vec2(uv.x*7.-uT*.5,uv.y*55.+uT*.1));
+  float sd=uv.y<-.03?fbm4(vec2(uv.x*7.-uT*.5,uv.y*55.+uT*.1)):0.;
   col+=vec3(.55,.3,.16)*pow(sd,4.)*smoothstep(-.03,-.3,uv.y)*.55;
   vec2 dg=uv*vec2(26.,14.)+vec2(-uT*.25,0.);
   vec2 id=floor(dg); vec2 f=fract(dg)-.5-(h22(id)-.5)*.6;
@@ -512,7 +519,7 @@ vec3 scene(vec2 uv){
   float dUp=pd3(warpP(p+vec2(0.,.008)));
   float lit=clamp((dUp-d)/.008*.8+.25,0.,1.);
   float tex=fbm(pd*11.);
-  float wisp=fbm(vec2(p.x*26.,p.y*9.-uT*.06));
+  float wisp=fbm4(vec2(p.x*26.,p.y*9.-uT*.06));
   if(d<.004){
     float depth=clamp(-d*22.,0.,1.);
     vec3 inner=mix(vec3(.018,.008,.0035),vec3(.002,.001,.0006),depth)*(.3+1.4*tex*tex);
@@ -524,7 +531,7 @@ vec3 scene(vec2 uv){
   col+=spikeStar(p-vec2(-.105,.27),.8*tw1)*vec3(1.,.9,.75)*(.35+.7*uB)*tw1;
   col+=spikeStar(p-vec2(.085,.108),.55*tw2)*vec3(1.,.9,.8)*(.35+.6*uB)*tw2;
   // 柱顶被星光蒸发出的气流，一缕缕往上飘
-  float ev=fbm(vec2(p.x*14.,p.y*5.-uT*.08));
+  float ev=fbm4(vec2(p.x*14.,p.y*5.-uT*.08));
   col+=vec3(.6,.75,.7)*pow(ev,3.)*exp(-max(d,0.)*30.)*step(0.,d)*lit*.5*smoothstep(-.2,.2,p.y);
   return col;
 }` },
@@ -683,7 +690,7 @@ vec3 scene(vec2 uv){
 }` },
 };
 const GLSL_MAIN = `
-uniform float uDim; uniform float uGround; uniform float uImp; uniform float uHz;
+uniform float uDim; uniform float uGround; uniform float uImp; uniform float uHz; uniform float uStir;
 uniform vec2 uCon[12]; uniform float uConN; uniform vec4 uConBox;
 void main(){
   vec2 sp=(gl_FragCoord.xy-.5*uRes)/uRes.y;
@@ -732,6 +739,8 @@ void main(){
   }
   c=1.-exp(-c*1.15);
   c=pow(c,vec3(.4545));
+  // 被打扰时画面褪色，再慢慢恢复
+  c=mix(c,vec3(dot(c,vec3(.299,.587,.114)))*.92,uStir*.9);
   c*=1.-.35*pow(length(sp*vec2(1.6,1.)),2.2);
   c*=uDim;
   c+=(h12(gl_FragCoord.xy+fract(uT)*91.)-.5)/180.;
@@ -741,9 +750,9 @@ void main(){
 // 各页面下背景的状态：速度、亮度、帧率、缩放
 const SPACE_MODES = {
   home: { speed: 1, dim: 1, fps: 30, zoom: 0.6, gzoom: 0.7, link: 0.35 },
-  session: { speed: 0.5, dim: 0.8, fps: 24, zoom: 0.72, gzoom: 1, link: 1 },
+  session: { speed: 0.5, dim: 0.8, fps: 20, zoom: 0.72, gzoom: 1, link: 1 },
   done: { speed: 0.6, dim: 0.75, fps: 24, zoom: 0.65, gzoom: 0.8, link: 0.5 },
-  page: { speed: 0.4, dim: 1, fps: 10, zoom: 0.6, gzoom: 0.7, link: 0.2 },
+  page: { speed: 0.4, dim: 0.3, fps: 10, zoom: 0.6, gzoom: 0.7, link: 0.2 },
 };
 
 // 灰尘的样子：月面在真空里沿抛物线飞、落得慢；火星有稀薄的风；太空里是一点点星尘
@@ -760,6 +769,7 @@ const Space = (() => {
   let cur = null, warp = null, last = 0, lastRaf = 0, slow = 0, running = false;
   let t = 20, rt = 3, mode = SPACE_MODES.home, dim = 1, zoom = mode.zoom, breath = null;
   let shift = null, catEl = null, cat = [0, 0, 0, 1], imprint = 1, link = mode.link;
+  let stirOn = false, stirV = 0;
   let ev = [0, 0, 0, 0], sun = [0, 0, 0, 0], mark = [0, 0, 0, 0];
   const con = new Float32Array(24);
   let conN = 0;
@@ -787,7 +797,7 @@ const Space = (() => {
     return (progs[id] = {
       p, a: gl.getAttribLocation(p, 'a'), res: u('uRes'), t: u('uT'), r: u('uR'), b: u('uB'), shift: u('uShift'), zoom: u('uZoom'),
       dim: u('uDim'), cat: u('uCat'), ground: u('uGround'), imp: u('uImp'), hz: u('uHz'), link: u('uLink'),
-      ev: u('uEv'), sun: u('uSun'), mk: u('uMk'), con: u('uCon'), conN: u('uConN'), conBox: u('uConBox'),
+      ev: u('uEv'), stir: u('uStir'), sun: u('uSun'), mk: u('uMk'), con: u('uCon'), conN: u('uConN'), conBox: u('uConBox'),
     });
   }
 
@@ -800,7 +810,7 @@ const Space = (() => {
 
   function size() {
     dpr = Math.min(devicePixelRatio || 1, 2);
-    gdpr = Math.min(dpr, 1.5);
+    gdpr = Math.min(dpr, 1.25);
     w = innerWidth; h = innerHeight; scale = 0;
     overlay.width = Math.round(w * dpr); overlay.height = Math.round(h * dpr);
   }
@@ -868,6 +878,7 @@ const Space = (() => {
     gl.uniform1f(P.hz, SCENES[id].ground !== undefined ? SCENES[id].ground : -1);
     gl.uniform1f(P.imp, v.imp);
     gl.uniform1f(P.link, link);
+    gl.uniform1f(P.stir, o ? 0 : stirV);
     gl.uniform4f(P.ev, ev[0], ev[1], ev[2], ev[3]);
     gl.uniform4f(P.sun, sun[0], sun[1], sun[2], sun[3]);
     gl.uniform4f(P.mk, mark[0], mark[1], mark[2], mark[3]);
@@ -886,7 +897,7 @@ const Space = (() => {
     if (lastRaf && !document.hidden) {
       const gap = now - lastRaf;
       slow = gap > 45 && gap < 500 ? slow + 1 : Math.max(0, slow - 1);
-      if (slow > 40 && quality > 0.5) { quality *= 0.85; slow = 0; }
+      if (slow > 20 && quality > 0.5) { quality *= 0.85; slow = 0; }
     }
     lastRaf = now;
     if (document.hidden || now - last < 1000 / mode.fps - 4) return;
@@ -896,6 +907,7 @@ const Space = (() => {
     const k = Math.min(1, dt * 3);
     dim += (mode.dim - dim) * k;
     link += (mode.link - link) * k;
+    stirV = stirOn ? Math.min(1, stirV + dt * 6) : Math.max(0, stirV - dt / 8);
     const zt = cur && SCENES[cur].ground !== undefined ? mode.gzoom : mode.zoom;
     zoom += (zt - zoom) * k;
     if (!w) size();
@@ -1012,8 +1024,12 @@ const Space = (() => {
         o2 = overlay.getContext('2d');
         if (!gl) return false;
         setupGL();
-        canvas.addEventListener('webglcontextlost', e => e.preventDefault());
-        canvas.addEventListener('webglcontextrestored', () => { setupGL(); scale = 0; });
+        // 显卡资源被系统收回时先露出极光背景，恢复后再切回来，不留黑屏
+        canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); document.body.classList.remove('space-on'); });
+        canvas.addEventListener('webglcontextrestored', () => {
+          setupGL(); scale = 0;
+          if (running) document.body.classList.add('space-on');
+        });
         addEventListener('resize', () => { w = 0; });
       }
       if (!gl) return false;
@@ -1035,10 +1051,12 @@ const Space = (() => {
     },
     mode(name, el) {
       mode = SPACE_MODES[name] || SPACE_MODES.home;
+      if (name === 'page') dim = mode.dim;
       catEl = el || null;
       if (name !== 'session') imprint = 1;
     },
     breath(b) { breath = b; },
+    stir(on) { stirOn = on; },
     // 地上被坐出的印子：0 还没坐下，1 坐实了（起身后印子保留）
     imprint(v) { imprint = v; },
     puff,

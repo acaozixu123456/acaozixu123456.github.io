@@ -603,6 +603,7 @@ function catMischief(host, index) {
 // 画面褪色、水面起波纹、小猫开始捣蛋，之后慢慢恢复平静
 function stir() {
   document.body.classList.add('stirred');
+  Space.stir(true);
   const stage = $('stage');
   stage.classList.add('stir');
   catMischief(stage, focus.count - 1);
@@ -612,6 +613,7 @@ function stir() {
 
 function calm() {
   document.body.classList.remove('stirred');
+  Space.stir(false);
   $('stage').classList.remove('stir', ...MISCHIEF_CLASSES);
 }
 

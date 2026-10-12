@@ -630,14 +630,14 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
 
 /* ---------- 宇宙背景（space.js） ---------- */
 
-.space { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -2; display: block; transition: filter 18s ease; }
+.space { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -2; display: block; }
 .space-warp { z-index: -1; pointer-events: none; }
 body.space-on .aurora { display: none; }
 body:not(.space-on) .space { display: none; }
 /* 记录、设置、衣柜、星图页：背景压暗，文字和卡片更清楚 */
-.space:not(.space-warp) { opacity: .3; transition: opacity .5s ease, filter 18s ease; }
-body[data-screen="home"] .space, body[data-screen="session"] .space, body[data-screen="done"] .space { opacity: 1; }
-.stirred .space { filter: saturate(.1) brightness(.92); transition: filter .5s ease; }
+/* iPhone 上，叠在不停重画的 WebGL 画布上的 CSS 滤镜和毛玻璃会偶尔闪出黑块：
+   宇宙背景下褪色、压暗都交给着色器，卡片改用不透明底色 */
+body.space-on .card, body.space-on .sm-sheet { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(15, 17, 26, .9); }
 /* 首页下半部分压暗一点，按钮和文字更清楚 */
 body.space-on[data-screen="home"]::before {
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
