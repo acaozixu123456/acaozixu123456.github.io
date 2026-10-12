@@ -17,10 +17,6 @@ const CAT_SVG = `
     <path class="s3" d="M24 132 l2 -5 l2 5 l5 2 l-5 2 l-2 5 l-2 -5 l-5 -2 z"/>
   </g>
   <g class="hopper">
-    <g class="legs">
-      <path class="fur" d="M77 162 h15 v30 a7.5 7.5 0 0 1 -15 0 z M108 162 h15 v30 a7.5 7.5 0 0 1 -15 0 z"/>
-      <ellipse class="light" cx="84" cy="195" rx="11" ry="5.5"/><ellipse class="light" cx="116" cy="195" rx="11" ry="5.5"/>
-    </g>
     <g class="poser">
     <g class="tail">
       <path d="M136 182 C 180 188, 196 144, 168 120"/>
@@ -28,13 +24,13 @@ const CAT_SVG = `
     </g>
     <g class="body-g">
       <path class="fur" d="M100 104 C 58 104, 45 148, 50 175 C 53 195, 147 195, 150 175 C 155 148, 142 104, 100 104 Z"/>
+      <g class="thighs"><path class="limb thigh-r"/><path class="limb thigh-l"/></g>
       <ellipse class="belly" cx="100" cy="161" rx="28" ry="25"/>
-      <g class="lotus">
-        <path class="fur" d="M46 186 C 44 170, 78 168, 100 179 C 122 168, 156 170, 154 186 C 152 199, 48 199, 46 186 Z"/>
-        <path class="crease" d="M64 182 C 78 178, 90 180, 100 186 C 110 180, 122 178, 136 182"/>
-        <ellipse class="light" cx="87" cy="188" rx="9.5" ry="6" transform="rotate(-18 87 188)"/>
-        <ellipse class="light" cx="113" cy="188" rx="9.5" ry="6" transform="rotate(18 113 188)"/>
-        <ellipse class="pad" cx="86" cy="188.5" rx="3.6" ry="2.6"/><ellipse class="pad" cx="114" cy="188.5" rx="3.6" ry="2.6"/>
+      <g class="legs">
+        <g class="leg leg-r"><path class="limb"/><path class="crease"/></g>
+        <g class="leg leg-l"><path class="limb"/><path class="crease"/></g>
+        <g class="foot foot-r"><ellipse class="light" rx="10.5" ry="6.5"/><ellipse class="pad" cx="-1" cy=".5" rx="3.6" ry="2.6"/><path class="toe" d="M-4 4 v-3.5 M4 4 v-3.5"/></g>
+        <g class="foot foot-l"><ellipse class="light" rx="10.5" ry="6.5"/><ellipse class="pad" cx="1" cy=".5" rx="3.6" ry="2.6"/><path class="toe" d="M-4 4 v-3.5 M4 4 v-3.5"/></g>
       </g>
       <g class="pawpos-l"><g class="paw paw-l"><ellipse class="light" cx="82" cy="189" rx="14" ry="9"/><path class="toe" d="M77 192 v-4 M87 192 v-4"/></g></g>
       <g class="pawpos-r"><g class="paw paw-r"><ellipse class="light" cx="118" cy="189" rx="14" ry="9"/><path class="toe" d="M113 192 v-4 M123 192 v-4"/></g></g>
@@ -105,6 +101,60 @@ const CAT_SVG = `
 
 function mountCats() {
   for (const host of document.querySelectorAll('.cat-host')) host.innerHTML = CAT_SVG;
+  for (const host of document.querySelectorAll('.lotus-mode')) catPose(host, 1);
+}
+
+/* ---------- 站着 ↔ 盘腿坐：s 从 0（站）到 1（盘腿），腿一路弯折收拢 ---------- */
+
+// 三个关键姿势：站着、半蹲（膝盖向外打开）、盘腿。左腿的数据，右腿镜像。
+// 胯跟着身体走；膝盖和脚按地面坐标给，脚先踩在地上，坐稳时翻成脚心朝上
+const LEG_KEYS = {
+  hip: [[85, 180], [84, 181], [82, 181]],
+  knee: [[85, 186], [63, 186], [53, 187]],
+  foot: [[85, 191], [89, 192], [112, 187]],
+};
+const SIT_LIFT = 14;
+
+function legAt(key, s, flip) {
+  const [a, m, b] = LEG_KEYS[key];
+  // 经过中间姿势的二次贝塞尔，速度连续，不会在半蹲时卡一下
+  const c = [2 * m[0] - (a[0] + b[0]) / 2, 2 * m[1] - (a[1] + b[1]) / 2];
+  const t = Math.min(1, Math.max(0, s)), u = 1 - t;
+  const x = u * u * a[0] + 2 * u * t * c[0] + t * t * b[0];
+  const y = u * u * a[1] + 2 * u * t * c[1] + t * t * b[1];
+  return [flip ? 200 - x : x, y];
+}
+
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+function catPose(host, s) {
+  const svg = host.querySelector('.cat');
+  if (!svg) return;
+  const t = Math.min(1, Math.max(0, s));
+  // 身体抬起的高度；坐下最后那一下轻轻往下一沉
+  const lift = Math.max(-0.8, SIT_LIFT * (1 - s));
+  const squash = 1 - 0.04 * Math.sin(Math.PI * t);
+  svg.querySelector('.poser').style.transform = `translateY(${-lift}px) scale(${1 + (1 - squash) * 0.5}, ${squash})`;
+  for (const [side, flip] of [['l', false], ['r', true]]) {
+    const leg = svg.querySelector('.leg-' + side);
+    const hip = legAt('hip', t, flip), knee = legAt('knee', t, flip), foot = legAt('foot', t, flip);
+    knee[1] += lift; foot[1] += lift;
+    const f = v => v.toFixed(1);
+    // 大腿画在肚皮后面，小腿画在前面：坐下时小腿交叠在肚子前
+    svg.querySelector('.thigh-' + side).setAttribute('d', `M${f(hip[0])} ${f(hip[1])} L${f(knee[0])} ${f(knee[1])}`);
+    leg.querySelector('.limb').setAttribute('d', `M${f(knee[0])} ${f(knee[1])} L${f(foot[0])} ${f(foot[1])}`);
+    // 小腿上沿的一道折痕，交叠时分得清两条腿
+    const dx = foot[0] - knee[0], dy = foot[1] - knee[1], len = Math.hypot(dx, dy) || 1;
+    const nx = dy / len * 7.5 * (dx > 0 ? 1 : -1), ny = -Math.abs(dx) / len * 7.5;
+    const crease = leg.querySelector('.crease');
+    crease.setAttribute('d', `M${f(knee[0] + nx + dx * .25)} ${f(knee[1] + ny + dy * .25)} L${f(foot[0] + nx - dx * .2)} ${f(foot[1] + ny - dy * .2)}`);
+    crease.style.opacity = (smooth(0.6, 0.95, t) * 0.45).toFixed(3);
+    const rot = (flip ? -18 : 18) * smooth(0.45, 1, t);
+    const foo = svg.querySelector('.foot-' + side);
+    foo.setAttribute('transform', `translate(${f(foot[0])} ${f(foot[1])}) rotate(${rot.toFixed(1)})`);
+    foo.querySelector('.pad').style.opacity = (smooth(0.65, 0.95, t) * 0.75).toFixed(3);
+    foo.querySelector('.toe').style.opacity = ((1 - smooth(0.3, 0.7, t)) * 0.5).toFixed(3);
+  }
 }
 
 /* ---------- 首页小猫：待机小动作和互动 ---------- */

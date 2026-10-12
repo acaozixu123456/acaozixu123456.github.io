@@ -886,6 +886,7 @@ const pose = { sit: 1, raf: 0, timer: 0 };
 function setSit(v) {
   pose.sit = v;
   $('stage-cat').style.setProperty('--sit', v.toFixed(3));
+  catPose($('stage-cat'), v);
 }
 
 // 从当前姿势平滑过渡到 target；坐下时最后轻轻一沉再回稳
