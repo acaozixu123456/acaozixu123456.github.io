@@ -4,7 +4,10 @@
 
 const LOG_KEY = 'meditation.log.v1';
 const SETTINGS_KEY = 'meditation.settings.v1';
-const DEFAULTS = { minutes: 10, interval: 0, prep: true, wake: true, volume: 0.7 };
+const DEFAULTS = {
+  minutes: 10, interval: 0, prep: true, wake: true, volume: 0.7,
+  mode: 'timer', pattern: '478', sound: 'none', noiseVolume: 0.5,
+};
 const PREP_SEC = 10;
 const MIN_SAVE_SEC = 60;
 
@@ -76,7 +79,8 @@ function stats(now = new Date()) {
 /* ---------- 声音（Web Audio 合成颂钵声，无需音频文件） ---------- */
 
 let ctx = null;
-let master = null;
+let master = null; // 钟声音量
+let bus = null;    // 所有声音最后汇到这里
 let keepAlive = null;
 
 function ensureAudio() {
@@ -87,11 +91,11 @@ function ensureAudio() {
     }
     const AC = window.AudioContext || window.webkitAudioContext;
     ctx = new AC();
-    const comp = ctx.createDynamicsCompressor();
-    comp.connect(ctx.destination);
+    bus = ctx.createDynamicsCompressor();
+    bus.connect(ctx.destination);
     master = ctx.createGain();
     master.gain.value = settings.volume;
-    master.connect(comp);
+    master.connect(bus);
   }
   if (ctx.state !== 'running') ctx.resume().catch(() => {});
   return ctx;
@@ -177,6 +181,224 @@ function stopKeepAlive() {
   keepAlive = null;
 }
 
+/* ---------- 背景音（全部现场合成，离线可用） ---------- */
+
+const NOISE_SEC = 8;
+const noiseBuffers = {};
+
+// 生成一段可无缝循环的噪声：多生成一点，把尾巴交叉淡入到开头
+function makeLoop(fill) {
+  const sr = ctx.sampleRate;
+  const len = sr * NOISE_SEC;
+  const fade = Math.floor(sr * 0.5);
+  const buf = ctx.createBuffer(2, len, sr);
+  for (let ch = 0; ch < 2; ch++) {
+    const raw = new Float32Array(len + fade);
+    fill(raw, sr);
+    const out = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) out[i] = raw[i];
+    for (let i = 0; i < fade; i++) {
+      const t = i / fade;
+      out[i] = raw[i] * Math.sqrt(t) + raw[len + i] * Math.sqrt(1 - t);
+    }
+  }
+  return buf;
+}
+
+function fillPink(a) {
+  let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+  for (let i = 0; i < a.length; i++) {
+    const w = Math.random() * 2 - 1;
+    b0 = 0.99886 * b0 + w * 0.0555179;
+    b1 = 0.99332 * b1 + w * 0.0750759;
+    b2 = 0.969 * b2 + w * 0.153852;
+    b3 = 0.8665 * b3 + w * 0.3104856;
+    b4 = 0.55 * b4 + w * 0.5329522;
+    b5 = -0.7616 * b5 - w * 0.016898;
+    a[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.11;
+    b6 = w * 0.115926;
+  }
+}
+
+function fillBrown(a) {
+  let last = 0;
+  for (let i = 0; i < a.length; i++) {
+    last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02;
+    a[i] = last * 3.5;
+  }
+}
+
+// 雨：细密的粉噪声上叠加随机雨滴
+function fillRain(a, sr) {
+  fillPink(a);
+  for (let i = 0; i < a.length; i++) a[i] *= 0.55;
+  const drops = Math.floor(a.length / sr * 40);
+  for (let d = 0; d < drops; d++) {
+    const at = Math.floor(Math.random() * a.length);
+    const amp = 0.05 + Math.random() ** 3 * 0.35;
+    const dur = Math.floor(sr * (0.004 + Math.random() * 0.012));
+    for (let i = 0; i < dur && at + i < a.length; i++) {
+      a[at + i] += (Math.random() * 2 - 1) * amp * Math.exp(-5 * i / dur);
+    }
+  }
+}
+
+function getBuffer(kind) {
+  if (!noiseBuffers[kind]) {
+    noiseBuffers[kind] = makeLoop({ pink: fillPink, brown: fillBrown, rain: fillRain }[kind]);
+  }
+  return noiseBuffers[kind];
+}
+
+function loopSource(kind) {
+  const src = ctx.createBufferSource();
+  src.buffer = getBuffer(kind);
+  src.loop = true;
+  // 每次从不同位置开始，避免听起来重复
+  src.start(0, Math.random() * NOISE_SEC);
+  return src;
+}
+
+function filter(type, freq, q = 0.7) {
+  const f = ctx.createBiquadFilter();
+  f.type = type;
+  f.frequency.value = freq;
+  f.Q.value = q;
+  return f;
+}
+
+// 缓慢起伏：返回一个 LFO，按 center ± depth 驱动某个参数
+function lfo(param, rate, center, depth) {
+  const o = ctx.createOscillator();
+  o.frequency.value = rate;
+  const g = ctx.createGain();
+  g.gain.value = depth;
+  param.value = center;
+  o.connect(g).connect(param);
+  o.start();
+  return o;
+}
+
+const NOISE_RECIPES = {
+  rain(out, parts) {
+    const drops = loopSource('rain');
+    const hp = filter('highpass', 400);
+    const lp = filter('lowpass', 7500);
+    const g = ctx.createGain();
+    g.gain.value = 0.9;
+    drops.connect(hp).connect(lp).connect(g).connect(out);
+    const rumble = loopSource('brown');
+    const rlp = filter('lowpass', 250);
+    const rg = ctx.createGain();
+    rg.gain.value = 0.35;
+    rumble.connect(rlp).connect(rg).connect(out);
+    parts.push(drops, rumble);
+  },
+  ocean(out, parts) {
+    // 浪：低沉的褐噪声，音量和亮度一起慢慢起落
+    const body = loopSource('brown');
+    const lp = filter('lowpass', 700);
+    const g = ctx.createGain();
+    body.connect(lp).connect(g).connect(out);
+    const rate = 0.075;
+    parts.push(body, lfo(g.gain, rate, 0.65, 0.35), lfo(lp.frequency, rate, 800, 450));
+    // 浪花的沙沙声
+    const foam = loopSource('pink');
+    const hp = filter('highpass', 1800);
+    const fg = ctx.createGain();
+    foam.connect(hp).connect(fg).connect(out);
+    parts.push(foam, lfo(fg.gain, rate, 0.12, 0.1));
+  },
+  forest(out, parts) {
+    // 风吹过树林
+    const wind = loopSource('brown');
+    const lp = filter('lowpass', 600);
+    const g = ctx.createGain();
+    wind.connect(lp).connect(g).connect(out);
+    parts.push(wind, lfo(g.gain, 0.05, 0.45, 0.25), lfo(lp.frequency, 0.037, 650, 300));
+    const leaves = loopSource('pink');
+    const hp = filter('bandpass', 3500, 0.5);
+    const lg = ctx.createGain();
+    leaves.connect(hp).connect(lg).connect(out);
+    parts.push(leaves, lfo(lg.gain, 0.06, 0.06, 0.04));
+    // 远处偶尔几声鸟叫
+    let timerId = null;
+    const sing = () => {
+      const t0 = ctx.currentTime + 0.05;
+      const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+      const bg = ctx.createGain();
+      bg.gain.value = 0.05 + Math.random() * 0.04;
+      if (pan) { pan.pan.value = Math.random() * 1.6 - 0.8; bg.connect(pan).connect(out); } else bg.connect(out);
+      const base = 2600 + Math.random() * 1400;
+      const notes = 2 + Math.floor(Math.random() * 4);
+      for (let n = 0; n < notes; n++) {
+        const t = t0 + n * (0.12 + Math.random() * 0.06);
+        const o = ctx.createOscillator();
+        const e = ctx.createGain();
+        o.frequency.setValueAtTime(base * (0.9 + Math.random() * 0.2), t);
+        o.frequency.exponentialRampToValueAtTime(base * (1.2 + Math.random() * 0.3), t + 0.07);
+        e.gain.setValueAtTime(0, t);
+        e.gain.linearRampToValueAtTime(1, t + 0.01);
+        e.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+        o.connect(e).connect(bg);
+        o.start(t);
+        o.stop(t + 0.1);
+      }
+      timerId = setTimeout(sing, 4000 + Math.random() * 9000);
+    };
+    timerId = setTimeout(sing, 2500);
+    parts.push({ stop() { clearTimeout(timerId); } });
+  },
+};
+
+let noise = null; // { kind, gain, parts }
+let previewTimer = null;
+
+function startNoise(kind, fadeSec = 3) {
+  clearTimeout(previewTimer);
+  if (!kind || kind === 'none' || !NOISE_RECIPES[kind]) { stopNoise(1); return; }
+  ensureAudio();
+  if (noise && noise.kind === kind) {
+    fadeTo(noise.gain, settings.noiseVolume, fadeSec);
+    return;
+  }
+  stopNoise(1);
+  const gain = ctx.createGain();
+  gain.gain.value = 0;
+  gain.connect(bus);
+  const parts = [];
+  NOISE_RECIPES[kind](gain, parts);
+  noise = { kind, gain, parts };
+  fadeTo(gain, settings.noiseVolume, fadeSec);
+}
+
+function stopNoise(fadeSec = 3) {
+  clearTimeout(previewTimer);
+  if (!noise) return;
+  const { gain, parts } = noise;
+  noise = null;
+  fadeTo(gain, 0, fadeSec);
+  setTimeout(() => {
+    for (const p of parts) { try { p.stop(); } catch {} }
+    try { gain.disconnect(); } catch {}
+  }, fadeSec * 1000 + 200);
+}
+
+function fadeTo(gain, value, sec) {
+  const now = ctx.currentTime;
+  gain.gain.cancelScheduledValues(now);
+  gain.gain.setValueAtTime(gain.gain.value, now);
+  gain.gain.linearRampToValueAtTime(value, now + Math.max(0.05, sec));
+}
+
+// 首页点选背景音时试听几秒
+function previewNoise(kind) {
+  if (timer.phase !== 'idle') return;
+  if (kind === 'none') { stopNoise(0.8); return; }
+  startNoise(kind, 0.8);
+  previewTimer = setTimeout(() => { if (timer.phase === 'idle') stopNoise(1.5); }, 4000);
+}
+
 /* ---------- 屏幕常亮 ---------- */
 
 let wakeLock = null;
@@ -196,6 +418,36 @@ function releaseWake() {
   wakeLock = null;
 }
 
+/* ---------- 呼吸节奏 ---------- */
+
+const PATTERNS = {
+  478: { name: '4-7-8', hint: '吸 4 秒，屏 7 秒，呼 8 秒', steps: [['吸气', 4, 'in'], ['屏息', 7, 'hold'], ['呼气', 8, 'out']] },
+  box: { name: '方块', hint: '吸、屏、呼、屏，各 4 秒', steps: [['吸气', 4, 'in'], ['屏息', 4, 'hold'], ['呼气', 4, 'out'], ['屏息', 4, 'hold']] },
+  calm: { name: '平稳', hint: '吸 5 秒，呼 5 秒', steps: [['吸气', 5, 'in'], ['呼气', 5, 'out']] },
+};
+const ORB_MIN = 0.45;
+const ORB_MAX = 1;
+
+// 按已练习的时间算出当前处在哪一步、圆有多大
+function breathState(ms, pattern) {
+  const cycle = pattern.steps.reduce((sum, st) => sum + st[1], 0);
+  let t = (ms / 1000) % cycle;
+  let level = ORB_MIN;
+  for (const [label, dur, kind] of pattern.steps) {
+    if (t < dur) {
+      const ease = (1 - Math.cos(Math.PI * t / dur)) / 2;
+      let scale = level;
+      if (kind === 'in') scale = ORB_MIN + (ORB_MAX - ORB_MIN) * ease;
+      if (kind === 'out') scale = ORB_MAX - (ORB_MAX - ORB_MIN) * ease;
+      return { label, count: Math.ceil(dur - t), scale };
+    }
+    t -= dur;
+    if (kind === 'in') level = ORB_MAX;
+    if (kind === 'out') level = ORB_MIN;
+  }
+  return { label: '', count: 0, scale: ORB_MIN };
+}
+
 /* ---------- 计时器 ---------- */
 
 // 所有时间都按真实时钟（Date.now）计算，切到后台再回来会自动校正
@@ -207,6 +459,9 @@ const timer = {
   elapsedBefore: 0,
   segStart: 0,
   startedAt: null,
+  mode: 'timer',     // timer | breath
+  pattern: null,
+  sound: 'none',
   scheduled: [],     // 已经排进音频时钟的声音节点
   audioAnchor: null, // 排程时音频时钟与真实时钟的对应关系
   tickId: null,
@@ -262,6 +517,9 @@ function startSession() {
   timer.intervalMs = settings.interval * 60 * 1000;
   timer.elapsedBefore = 0;
   timer.startedAt = null;
+  timer.mode = settings.mode;
+  timer.pattern = PATTERNS[settings.pattern] || PATTERNS['478'];
+  timer.sound = settings.sound;
   stopArmedUntil = 0;
   const now = Date.now();
   if (settings.prep) {
@@ -272,10 +530,13 @@ function startSession() {
   }
   schedule(now);
   startKeepAlive();
+  startNoise(timer.sound, 4);
   requestWake();
+  $('session').classList.toggle('breath', timer.mode === 'breath');
   show('session');
   renderSession();
   timer.tickId = setInterval(tick, 250);
+  if (timer.mode === 'breath') requestAnimationFrame(animateBreath);
 }
 
 function beginRunning(now) {
@@ -315,10 +576,12 @@ function togglePause() {
     timer.elapsedBefore = elapsedMs(now);
     timer.phase = 'paused';
     unschedule();
+    if (noise) fadeTo(noise.gain, 0, 1.5);
   } else if (timer.phase === 'paused') {
     timer.phase = 'running';
     timer.segStart = now;
     schedule(now);
+    startNoise(timer.sound, 1.5);
   }
   renderSession(now);
 }
@@ -360,6 +623,7 @@ function finish(completed, now = Date.now()) {
     unschedule();
   }
   timer.phase = 'idle';
+  stopNoise(completed ? 8 : 2);
   // 等结束钟响完再停掉保活音
   setTimeout(() => { if (timer.phase === 'idle') stopKeepAlive(); }, 12000);
   releaseWake();
@@ -373,7 +637,9 @@ function finish(completed, now = Date.now()) {
   const sec = Math.round(elapsed / 1000);
   const savedEntry = sec >= MIN_SAVE_SEC;
   if (savedEntry) {
-    log.push({ start: timer.startedAt, sec, planned: Math.round(timer.plannedMs / 1000) });
+    const entry = { start: timer.startedAt, sec, planned: Math.round(timer.plannedMs / 1000) };
+    if (timer.mode === 'breath') entry.mode = 'breath';
+    log.push(entry);
     saveLog();
   }
   if (!completed && !savedEntry) {
@@ -384,7 +650,7 @@ function finish(completed, now = Date.now()) {
   }
   const s = stats();
   $('done-title').textContent = completed ? '完成' : '已结束';
-  $('done-detail').textContent = `这次 ${formatDuration(sec)}，已连续 ${s.streak} 天`;
+  $('done-detail').textContent = `这次${timer.mode === 'breath' ? '呼吸练习' : ''} ${formatDuration(sec)}，已连续 ${s.streak} 天`;
   show('done');
 }
 
@@ -396,6 +662,7 @@ const RING_LEN = 2 * Math.PI * 90;
 function show(id) {
   for (const el of document.querySelectorAll('.screen')) el.classList.toggle('active', el.id === id);
   window.scrollTo(0, 0);
+  if (id === 'stats' || id === 'settings') stopNoise(0.8);
 }
 
 function formatClock(ms) {
@@ -415,57 +682,184 @@ function formatDuration(sec) {
 }
 
 function renderSession(now = Date.now()) {
-  const ring = $('ring');
   const session = $('session');
   session.classList.toggle('paused', timer.phase === 'paused');
+  const breath = timer.mode === 'breath';
   let fraction;
   if (timer.phase === 'prep') {
     const left = Math.max(0, timer.prepEndsAt - now);
     $('phase').textContent = '准备';
     $('time').textContent = String(Math.ceil(left / 1000));
-    $('session-hint').textContent = '坐好，放松肩膀。轻点圆圈可跳过准备。';
+    $('sub').textContent = '';
+    $('session-hint').textContent = '坐好，放松肩膀。轻点圆圈跳过';
     $('pause').hidden = true;
     $('stop').textContent = '取消';
     $('stop').classList.remove('armed');
     fraction = left / (PREP_SEC * 1000);
   } else {
     const left = timer.plannedMs - elapsedMs(now);
-    $('phase').textContent = timer.phase === 'paused' ? '已暂停' : '冥想中';
-    $('time').textContent = formatClock(left);
-    $('session-hint').textContent = timer.phase === 'paused' ? '' : '专注呼吸。';
+    const paused = timer.phase === 'paused';
+    if (breath) {
+      $('phase').textContent = paused ? '已暂停' : formatClock(left);
+      $('session-hint').textContent = timer.pattern.hint;
+    } else {
+      $('phase').textContent = paused ? '已暂停' : '静坐';
+      $('time').textContent = formatClock(left);
+      $('sub').textContent = '';
+      $('session-hint').textContent = '';
+    }
     $('pause').hidden = false;
-    $('pause').textContent = timer.phase === 'paused' ? '继续' : '暂停';
+    $('pause').textContent = paused ? '继续' : '暂停';
     $('stop').textContent = now < stopArmedUntil ? '再点一次结束' : '结束';
     $('stop').classList.toggle('armed', now < stopArmedUntil);
     fraction = left / timer.plannedMs;
   }
-  ring.style.strokeDashoffset = String(RING_LEN * (1 - Math.max(0, Math.min(1, fraction))));
+  $('ring').style.strokeDashoffset = String(RING_LEN * (1 - Math.max(0, Math.min(1, fraction))));
+  if (breath) renderBreath(now);
+}
+
+function renderBreath(now = Date.now()) {
+  const orb = $('orb');
+  if (timer.phase === 'prep') {
+    orb.style.transform = `scale(${ORB_MIN})`;
+    orb.style.opacity = '0.35';
+    return;
+  }
+  const st = breathState(elapsedMs(now), timer.pattern);
+  orb.style.transform = `scale(${st.scale.toFixed(4)})`;
+  orb.style.opacity = String(0.35 + 0.4 * (st.scale - ORB_MIN) / (ORB_MAX - ORB_MIN));
+  if ($('time').textContent !== st.label) $('time').textContent = st.label;
+  const count = String(st.count);
+  if ($('sub').textContent !== count) $('sub').textContent = count;
+}
+
+// 呼吸圆每帧更新，动画才顺滑
+function animateBreath() {
+  if (timer.phase === 'idle' || timer.mode !== 'breath') return;
+  renderBreath();
+  requestAnimationFrame(animateBreath);
 }
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 
 function renderHome() {
   const s = stats();
-  $('streak').textContent = s.streak;
-  $('today').textContent = s.todayMin;
-  $('total').textContent = s.totalMin;
-
+  const breath = settings.mode === 'breath';
+  for (const b of $('mode').children) b.classList.toggle('on', b.dataset.mode === settings.mode);
   $('minutes').value = settings.minutes;
   for (const b of $('presets').children) b.classList.toggle('on', Number(b.dataset.min) === settings.minutes);
+  $('pattern-row').hidden = !breath;
+  for (const b of $('patterns').children) b.classList.toggle('on', b.dataset.pattern === settings.pattern);
+  for (const b of $('sounds').children) b.classList.toggle('on', b.dataset.sound === settings.sound);
+  const parts = [];
+  if (s.streak) parts.push(`连续 ${s.streak} 天`);
+  if (s.todayMin) parts.push(`今天 ${s.todayMin} 分钟`);
+  $('summary').textContent = parts.length ? parts.join(' · ') : (log.length ? '今天还没开始' : '');
+}
+
+function renderSettings() {
   $('interval').value = String(settings.interval);
   $('prep').checked = settings.prep;
   $('wake').checked = settings.wake;
   $('volume').value = String(settings.volume);
+  $('noise-volume').value = String(settings.noiseVolume);
+}
 
+/* ---------- 统计页 ---------- */
+
+let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let calSelected = null;
+
+function level(sec) {
+  const m = sec / 60;
+  if (m <= 0) return 0;
+  if (m < 10) return 1;
+  if (m < 20) return 2;
+  if (m < 30) return 3;
+  return 4;
+}
+
+function renderStats(now = new Date()) {
+  const byDay = new Map();
+  for (const e of log) {
+    const k = dayKey(e.start);
+    const d = byDay.get(k) || { sec: 0, n: 0 };
+    d.sec += e.sec;
+    d.n++;
+    byDay.set(k, d);
+  }
+
+  // 本周从周一算起
+  const weekStart = shiftDay(now, -((now.getDay() + 6) % 7));
+  weekStart.setHours(0, 0, 0, 0);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  let weekSec = 0;
+  let monthSec = 0;
+  for (const e of log) {
+    const t = new Date(e.start);
+    if (t >= weekStart) weekSec += e.sec;
+    if (t >= monthStart) monthSec += e.sec;
+  }
+  const s = stats(now);
+  $('n-streak').textContent = s.streak;
+  $('n-week').textContent = Math.floor(weekSec / 60);
+  $('n-month').textContent = Math.floor(monthSec / 60);
+  $('n-total').textContent = s.totalMin;
+
+  // 月历
+  const y = calMonth.getFullYear();
+  const m = calMonth.getMonth();
+  $('cal-title').textContent = `${y} 年 ${m + 1} 月`;
+  $('cal-next').style.visibility = y === now.getFullYear() && m === now.getMonth() ? 'hidden' : 'visible';
+  const cal = $('cal');
+  cal.textContent = '';
+  const lead = (new Date(y, m, 1).getDay() + 6) % 7;
+  for (let i = 0; i < lead; i++) cal.append(document.createElement('div'));
+  const days = new Date(y, m + 1, 0).getDate();
+  const todayKey = dayKey(now);
+  for (let day = 1; day <= days; day++) {
+    const date = new Date(y, m, day);
+    const k = dayKey(date);
+    const info = byDay.get(k);
+    const cell = document.createElement('button');
+    cell.className = 'd';
+    cell.dataset.l = String(info ? level(info.sec) : 0);
+    if (k === todayKey) cell.classList.add('today');
+    if (date > now) cell.classList.add('future');
+    if (k === calSelected) cell.classList.add('sel');
+    const num = document.createElement('span');
+    num.textContent = day;
+    cell.append(num);
+    cell.addEventListener('click', () => {
+      calSelected = calSelected === k ? null : k;
+      renderStats();
+    });
+    cal.append(cell);
+  }
+  let note = '';
+  if (calSelected) {
+    const d = new Date(calSelected + 'T00:00');
+    const info = byDay.get(calSelected);
+    const label = `${d.getMonth() + 1} 月 ${d.getDate()} 日`;
+    note = info ? `${label}：${info.n} 次，共 ${formatDuration(info.sec)}` : `${label}没有练习`;
+  }
+  $('cal-note').textContent = note;
+
+  // 最近记录
   const list = $('log');
   list.textContent = '';
-  const recent = log.slice(-20).reverse();
-  for (const e of recent) {
+  for (const e of log.slice(-10).reverse()) {
     const d = new Date(e.start);
     const li = document.createElement('li');
     const when = document.createElement('span');
     when.className = 'when';
     when.textContent = `${d.getMonth() + 1}月${d.getDate()}日 周${WEEKDAYS[d.getDay()]} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    if (e.mode === 'breath') {
+      const tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.textContent = '呼吸';
+      when.append(tag);
+    }
     const dur = document.createElement('span');
     dur.textContent = formatDuration(e.sec);
     const del = document.createElement('button');
@@ -481,7 +875,7 @@ function renderHome() {
       }
       log = log.filter(x => x !== e);
       saveLog();
-      renderHome();
+      renderStats();
     });
     const right = document.createElement('span');
     right.append(dur, del);
@@ -539,12 +933,14 @@ async function importLog(file) {
     for (const e of incoming) {
       if (!e || typeof e.start !== 'string' || isNaN(Date.parse(e.start)) || !(e.sec > 0)) continue;
       if (known.has(e.start)) continue;
-      log.push({ start: e.start, sec: Math.round(e.sec), planned: Math.round(e.planned || e.sec) });
+      const entry = { start: e.start, sec: Math.round(e.sec), planned: Math.round(e.planned || e.sec) };
+      if (e.mode === 'breath') entry.mode = 'breath';
+      log.push(entry);
       known.add(e.start);
       added++;
     }
     saveLog();
-    renderHome();
+    renderStats();
     toast(`导入完成，新增 ${added} 条记录。`);
   } catch {
     toast('这个文件不是有效的备份。');
@@ -553,13 +949,51 @@ async function importLog(file) {
 
 /* ---------- 事件 ---------- */
 
-$('presets').addEventListener('click', e => {
-  const b = e.target.closest('button');
-  if (b) setMinutes(b.dataset.min);
-});
+function pick(containerId, attr, onPick) {
+  $(containerId).addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (b && b.dataset[attr]) onPick(b.dataset[attr]);
+  });
+}
+
+// 节奏选项由 PATTERNS 生成
+for (const [key, p] of Object.entries(PATTERNS)) {
+  const b = document.createElement('button');
+  b.dataset.pattern = key;
+  b.textContent = p.name;
+  $('patterns').append(b);
+}
+
+pick('mode', 'mode', v => { settings.mode = v; saveSettings(); renderHome(); });
+pick('presets', 'min', setMinutes);
+pick('patterns', 'pattern', v => { settings.pattern = v; saveSettings(); renderHome(); });
+pick('sounds', 'sound', v => { settings.sound = v; saveSettings(); renderHome(); previewNoise(v); });
 $('minus').addEventListener('click', () => setMinutes(settings.minutes - 1));
 $('plus').addEventListener('click', () => setMinutes(settings.minutes + 1));
 $('minutes').addEventListener('change', e => setMinutes(e.target.value));
+
+$('open-stats').addEventListener('click', () => {
+  const now = new Date();
+  calMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  calSelected = null;
+  renderStats();
+  show('stats');
+});
+$('open-settings').addEventListener('click', () => { renderSettings(); show('settings'); });
+for (const b of document.querySelectorAll('[data-back]')) {
+  b.addEventListener('click', () => { renderHome(); show('home'); });
+}
+$('cal-prev').addEventListener('click', () => {
+  calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1);
+  calSelected = null;
+  renderStats();
+});
+$('cal-next').addEventListener('click', () => {
+  calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1);
+  calSelected = null;
+  renderStats();
+});
+
 $('interval').addEventListener('change', e => { settings.interval = Number(e.target.value); saveSettings(); });
 $('prep').addEventListener('change', e => { settings.prep = e.target.checked; saveSettings(); });
 $('wake').addEventListener('change', e => { settings.wake = e.target.checked; saveSettings(); });
@@ -568,11 +1002,17 @@ $('volume').addEventListener('input', e => {
   if (master) master.gain.value = settings.volume;
   saveSettings();
 });
+$('noise-volume').addEventListener('input', e => {
+  settings.noiseVolume = Number(e.target.value);
+  if (noise) fadeTo(noise.gain, settings.noiseVolume, 0.1);
+  saveSettings();
+});
 $('test').addEventListener('click', () => play('bowl'));
+
 $('start').addEventListener('click', startSession);
 $('pause').addEventListener('click', togglePause);
 $('stop').addEventListener('click', stopEarly);
-document.querySelector('.ring-wrap').addEventListener('click', skipPrep);
+$('stage').addEventListener('click', skipPrep);
 $('back').addEventListener('click', () => { show('home'); renderHome(); });
 $('export').addEventListener('click', exportLog);
 $('import').addEventListener('change', e => {

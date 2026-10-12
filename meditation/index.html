@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <meta name="theme-color" content="#161b26">
+  <meta name="theme-color" content="#10131b" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f4f1ea" media="(prefers-color-scheme: light)">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -17,23 +18,33 @@
 <body>
   <!-- 首页 -->
   <main id="home" class="screen active">
-    <header class="stats">
-      <div class="stat">
-        <div class="stat-num" id="streak">0</div>
-        <div class="stat-label">连续天数</div>
-      </div>
-      <div class="stat">
-        <div class="stat-num" id="today">0</div>
-        <div class="stat-label">今天（分钟）</div>
-      </div>
-      <div class="stat">
-        <div class="stat-num" id="total">0</div>
-        <div class="stat-label">总时长（分钟）</div>
+    <header class="topbar">
+      <div class="brand">冥想</div>
+      <div class="top-actions">
+        <button class="icon-btn" id="open-stats" aria-label="统计">
+          <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+        </button>
+        <button class="icon-btn" id="open-settings" aria-label="设置">
+          <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+        </button>
       </div>
     </header>
 
-    <section class="card">
-      <h2>时长</h2>
+    <div class="home-body">
+      <div class="segmented" id="mode" role="tablist">
+        <button data-mode="timer">静坐</button>
+        <button data-mode="breath">呼吸</button>
+      </div>
+
+      <div class="duration">
+        <button class="step" id="minus" aria-label="减少一分钟">−</button>
+        <label class="dur-val">
+          <input id="minutes" type="number" inputmode="numeric" min="1" max="180" value="10">
+          <span>分钟</span>
+        </label>
+        <button class="step" id="plus" aria-label="增加一分钟">+</button>
+      </div>
+
       <div class="chips" id="presets">
         <button data-min="5">5</button>
         <button data-min="10">10</button>
@@ -41,17 +52,85 @@
         <button data-min="20">20</button>
         <button data-min="30">30</button>
       </div>
-      <div class="custom">
-        <button class="step" id="minus" aria-label="减少一分钟">−</button>
-        <label class="custom-val"><input id="minutes" type="number" inputmode="numeric" min="1" max="180" value="10"> 分钟</label>
-        <button class="step" id="plus" aria-label="增加一分钟">+</button>
+
+      <div class="option" id="pattern-row">
+        <div class="option-label">节奏</div>
+        <div class="pills" id="patterns"></div>
       </div>
+
+      <div class="option">
+        <div class="option-label">背景音</div>
+        <div class="pills" id="sounds">
+          <button data-sound="none">无</button>
+          <button data-sound="rain">雨声</button>
+          <button data-sound="ocean">海浪</button>
+          <button data-sound="forest">森林</button>
+        </div>
+      </div>
+    </div>
+
+    <footer class="home-foot">
+      <button id="start" class="start-btn">开始</button>
+      <p class="summary" id="summary"></p>
+    </footer>
+  </main>
+
+  <!-- 统计页 -->
+  <main id="stats" class="screen">
+    <header class="topbar">
+      <button class="icon-btn" data-back aria-label="返回">
+        <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="page-title">记录</div>
+      <span class="icon-btn" aria-hidden="true"></span>
+    </header>
+
+    <section class="numbers">
+      <div><b id="n-streak">0</b><span>连续天数</span></div>
+      <div><b id="n-week">0</b><span>本周分钟</span></div>
+      <div><b id="n-month">0</b><span>本月分钟</span></div>
+      <div><b id="n-total">0</b><span>累计分钟</span></div>
     </section>
 
-    <button id="start" class="primary">开始</button>
+    <section class="card">
+      <div class="cal-head">
+        <button class="icon-btn small" id="cal-prev" aria-label="上个月">
+          <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+        </button>
+        <div id="cal-title"></div>
+        <button class="icon-btn small" id="cal-next" aria-label="下个月">
+          <svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+      <div class="cal-week"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+      <div class="cal" id="cal"></div>
+      <p class="cal-note" id="cal-note"></p>
+      <div class="legend"><span>少</span><i data-l="1"></i><i data-l="2"></i><i data-l="3"></i><i data-l="4"></i><span>多</span></div>
+    </section>
 
-    <section class="card settings">
-      <h2>设置</h2>
+    <section class="card">
+      <h2>最近</h2>
+      <ul id="log" class="log"></ul>
+      <p id="log-empty" class="hint">还没有记录，今天开始第一次吧。</p>
+    </section>
+
+    <div class="backup">
+      <button id="export" class="text-btn">导出备份</button>
+      <label class="text-btn file-btn">导入备份<input id="import" type="file" accept="application/json,.json" hidden></label>
+    </div>
+  </main>
+
+  <!-- 设置页 -->
+  <main id="settings" class="screen">
+    <header class="topbar">
+      <button class="icon-btn" data-back aria-label="返回">
+        <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="page-title">设置</div>
+      <span class="icon-btn" aria-hidden="true"></span>
+    </header>
+
+    <section class="card">
       <label class="row">
         <span>中途钟声</span>
         <select id="interval">
@@ -66,42 +145,44 @@
         <input type="checkbox" id="prep" class="switch">
       </label>
       <label class="row">
-        <span>计时中保持屏幕常亮</span>
+        <span>计时中屏幕常亮</span>
         <input type="checkbox" id="wake" class="switch">
       </label>
+    </section>
+
+    <section class="card">
       <label class="row">
         <span>钟声音量</span>
         <input type="range" id="volume" min="0.1" max="1" step="0.05">
       </label>
+      <label class="row">
+        <span>背景音音量</span>
+        <input type="range" id="noise-volume" min="0.05" max="1" step="0.05">
+      </label>
       <div class="row">
         <span>试听钟声</span>
-        <button id="test" class="ghost small">▶︎ 播放</button>
-      </div>
-      <p class="hint">提示：iPhone 侧面静音键打开时可能没有声音。</p>
-    </section>
-
-    <section class="card">
-      <h2>最近记录</h2>
-      <ul id="log" class="log"></ul>
-      <p id="log-empty" class="hint">还没有记录，今天开始第一次吧。</p>
-      <div class="backup">
-        <button id="export" class="ghost small">导出备份</button>
-        <label class="ghost small file-btn">导入备份<input id="import" type="file" accept="application/json,.json" hidden></label>
+        <button id="test" class="text-btn">播放</button>
       </div>
     </section>
+    <p class="hint pad">iPhone 侧面静音键打开时可能没有声音。</p>
   </main>
 
   <!-- 计时页 -->
   <main id="session" class="screen">
     <div class="phase" id="phase">准备</div>
-    <div class="ring-wrap">
+    <div class="stage" id="stage">
       <svg class="ring" viewBox="0 0 200 200" aria-hidden="true">
         <circle class="ring-bg" cx="100" cy="100" r="90"/>
         <circle class="ring-fg" id="ring" cx="100" cy="100" r="90"/>
       </svg>
-      <div class="time" id="time">10</div>
+      <div class="orb-guide" aria-hidden="true"></div>
+      <div class="orb" id="orb" aria-hidden="true"></div>
+      <div class="center-text">
+        <div class="time" id="time">10</div>
+        <div class="sub" id="sub"></div>
+      </div>
     </div>
-    <p class="hint center" id="session-hint">坐好，放松肩膀。轻点圆圈可跳过准备。</p>
+    <p class="hint center" id="session-hint"></p>
     <div class="controls">
       <button id="pause" class="ghost">暂停</button>
       <button id="stop" class="ghost">结束</button>
@@ -110,10 +191,10 @@
 
   <!-- 完成页 -->
   <main id="done" class="screen">
-    <div class="done-mark">◯</div>
+    <div class="done-mark" aria-hidden="true"></div>
     <h1 id="done-title">完成</h1>
-    <p id="done-detail" class="center"></p>
-    <button id="back" class="primary">回到首页</button>
+    <p id="done-detail" class="center muted"></p>
+    <button id="back" class="ghost wide">回到首页</button>
   </main>
 
   <div id="toast" class="toast" hidden></div>
