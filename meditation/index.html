@@ -6,7 +6,8 @@
   <meta name="theme-color" content="#10131b" id="theme-color">
   <script>
     // 尽早套用外观，避免闪一下
-    try { var t = (JSON.parse(localStorage.getItem('meditation.settings.v1')) || {}).theme; if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+    // 宇宙背景（默认）下始终深色
+    try { var s = JSON.parse(localStorage.getItem('meditation.settings.v1')) || {}; if (s.bg === 'aurora' && s.theme) document.documentElement.dataset.theme = s.theme; } catch (e) {}
   </script>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
@@ -28,6 +29,9 @@
       <div class="brand">冥想</div>
       <div class="top-actions">
         <button class="fish-pill" id="open-wardrobe" aria-label="小猫衣柜"><svg class="fish" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12c3.2-5 9.3-6.2 13.3-2.8L20.5 6v12l-4.7-3.2C11.8 18.2 5.7 17 2.5 12z"/><circle cx="7.6" cy="11" r="1.1"/></svg><span id="fish-count">0</span></button>
+        <button class="icon-btn map-btn" id="open-map" aria-label="星图">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M4.2 15.6c-1.3 1.6-1.6 2.9-.9 3.5 1.4 1.2 6.4-1.4 11.1-5.7s7.4-8.6 6-9.8c-.7-.6-2.1-.3-3.8.8"/></svg>
+        </button>
         <button class="icon-btn" id="open-stats" aria-label="统计">
           <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
         </button>
@@ -38,6 +42,7 @@
     </header>
 
     <div class="home-body">
+      <button class="place-tag" id="place-tag" aria-label="当前地点，打开星图">月海</button>
       <div class="cat-host home-cat" id="home-cat" aria-hidden="true"></div>
       <div class="segmented" id="mode" role="tablist">
         <button data-mode="timer">静坐</button>
@@ -154,6 +159,19 @@
     <div class="items" id="items"></div>
   </main>
 
+  <!-- 星图 -->
+  <main id="starmap" class="screen">
+    <header class="topbar sm-head">
+      <button class="icon-btn" data-back aria-label="返回">
+        <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="page-title">星图</div>
+      <span class="sm-hours" id="sm-hours"></span>
+    </header>
+    <div class="sm-route" id="sm-route"></div>
+    <div class="sm-sheet off" id="sm-sheet"></div>
+  </main>
+
   <!-- 设置页 -->
   <main id="settings" class="screen">
     <header class="topbar">
@@ -175,7 +193,14 @@
         </select>
       </label>
       <label class="row">
-        <span>外观</span>
+        <span>背景</span>
+        <select id="bg">
+          <option value="space">宇宙</option>
+          <option value="aurora">经典极光</option>
+        </select>
+      </label>
+      <label class="row">
+        <span>外观<small>宇宙背景下始终是深色</small></span>
         <select id="theme">
           <option value="dark">深色</option>
           <option value="light">浅色</option>
@@ -256,6 +281,7 @@
     <p id="done-focus" class="focus center"></p>
     <div id="done-effects" class="done-effects"></div>
     <p id="done-fish" class="done-fish"></p>
+    <p id="done-travel" class="done-travel"></p>
     <button id="back" class="ghost wide">回到首页</button>
   </main>
 
@@ -264,6 +290,8 @@
   <script src="cat.js"></script>
   <script src="effects.js"></script>
   <script src="wardrobe.js"></script>
+  <script src="space.js"></script>
+  <script src="travel.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
