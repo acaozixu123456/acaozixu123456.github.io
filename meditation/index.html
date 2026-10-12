@@ -1,10 +1,13 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <meta name="theme-color" content="#10131b" media="(prefers-color-scheme: dark)">
-  <meta name="theme-color" content="#f4f1ea" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#10131b" id="theme-color">
+  <script>
+    // 尽早套用外观，避免闪一下
+    try { var t = (JSON.parse(localStorage.getItem('meditation.settings.v1')) || {}).theme; if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -142,6 +145,14 @@
           <option value="5">每 5 分钟</option>
           <option value="10">每 10 分钟</option>
           <option value="15">每 15 分钟</option>
+        </select>
+      </label>
+      <label class="row">
+        <span>外观</span>
+        <select id="theme">
+          <option value="dark">深色</option>
+          <option value="light">浅色</option>
+          <option value="auto">跟随系统</option>
         </select>
       </label>
       <label class="row">

@@ -6,7 +6,7 @@ const LOG_KEY = 'meditation.log.v1';
 const SETTINGS_KEY = 'meditation.settings.v1';
 const DEFAULTS = {
   minutes: 10, interval: 0, prep: true, wake: true, volume: 0.7,
-  mode: 'timer', pattern: '478', sound: 'none', noiseVolume: 0.5, focus: true,
+  mode: 'timer', pattern: '478', sound: 'none', noiseVolume: 0.5, focus: true, theme: 'dark',
 };
 const PREP_SEC = 10;
 const MIN_SAVE_SEC = 60;
@@ -451,7 +451,8 @@ function breathState(ms, pattern) {
 /* ---------- 专注检测：离开 app、碰屏幕、拿起手机 ---------- */
 
 const GRACE_MS = 6000;     // 刚开始或刚继续时，留时间把手机放下
-const MERGE_MS = 8000;     // 连续的动作算作一次
+const STILL_MS = 1500;     // 手机静止这么久之后再动，算新的一次
+const REPEAT_MS = 12000;   // 一直拿着玩，每隔这么久再算一次
 const LEAVE_MIN_MS = 3000; // 离开不到 3 秒不算
 const FOCUS_TEXT = { leave: '离开了 app', touch: '碰了屏幕', move: '拿起了手机' };
 
@@ -460,7 +461,8 @@ const focus = {
   count: 0,
   kinds: { leave: 0, touch: 0, move: 0 },
   marks: [],
-  lastAt: 0,
+  lastActivity: 0,
+  lastCounted: 0,
   graceUntil: 0,
   hiddenAt: 0,
   alertUntil: 0,
@@ -474,7 +476,8 @@ function resetFocus(now) {
   focus.count = 0;
   focus.kinds = { leave: 0, touch: 0, move: 0 };
   focus.marks = [];
-  focus.lastAt = 0;
+  focus.lastActivity = 0;
+  focus.lastCounted = 0;
   focus.hiddenAt = 0;
   focus.alertUntil = 0;
   focus.graceUntil = now + GRACE_MS;
@@ -505,14 +508,16 @@ function onMotion(e) {
   const r = e.rotationRate;
   const acc = a && a.x != null ? Math.hypot(a.x, a.y, a.z) : 0;
   const rot = r && r.alpha != null ? Math.hypot(r.alpha, r.beta, r.gamma) : 0;
-  if (acc > 1.2 || rot > 40) disturb('move');
+  if (acc > 0.6 || rot > 25) disturb('move');
 }
 
 function disturb(kind, now = Date.now()) {
   if (!focus.on || timer.phase !== 'running' || now < focus.graceUntil) return;
-  const merged = now - focus.lastAt < MERGE_MS;
-  focus.lastAt = now;
-  if (merged) return;
+  // 之前只要一直有小动作就不再计数，第二次拿起常常漏掉；改为看手机是否静止过
+  const fresh = now - focus.lastActivity > STILL_MS || now - focus.lastCounted > REPEAT_MS;
+  focus.lastActivity = now;
+  if (!fresh) return;
+  focus.lastCounted = now;
   focus.count++;
   focus.kinds[kind]++;
   focus.alertUntil = now + 4000;
@@ -920,6 +925,7 @@ function renderSettings() {
   $('interval').value = String(settings.interval);
   $('prep').checked = settings.prep;
   $('wake').checked = settings.wake;
+  $('theme').value = settings.theme;
   $('focus-detect').checked = settings.focus;
   $('volume').value = String(settings.volume);
   $('noise-volume').value = String(settings.noiseVolume);
@@ -1164,6 +1170,7 @@ $('cal-next').addEventListener('click', () => {
 $('interval').addEventListener('change', e => { settings.interval = Number(e.target.value); saveSettings(); });
 $('prep').addEventListener('change', e => { settings.prep = e.target.checked; saveSettings(); });
 $('wake').addEventListener('change', e => { settings.wake = e.target.checked; saveSettings(); });
+$('theme').addEventListener('change', e => { settings.theme = e.target.value; saveSettings(); applyTheme(); });
 $('focus-detect').addEventListener('change', e => {
   settings.focus = e.target.checked;
   saveSettings();
@@ -1217,14 +1224,16 @@ document.addEventListener('visibilitychange', () => {
   if ((timer.phase === 'prep' || timer.phase === 'running') && !audioClockHealthy()) schedule();
 });
 
+function applyTheme() {
+  document.documentElement.dataset.theme = settings.theme;
+  const light = settings.theme === 'light' || (settings.theme === 'auto' && matchMedia('(prefers-color-scheme: light)').matches);
+  $('theme-color').content = light ? '#f4f1ea' : '#10131b';
+}
+applyTheme();
+matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', applyTheme);
+
 mountCats();
-// 首页轻点小猫，它会歪头看你
-let homeCatTimer = null;
-$('home-cat').addEventListener('click', () => {
-  catMischief($('home-cat'), 0);
-  clearTimeout(homeCatTimer);
-  homeCatTimer = setTimeout(() => $('home-cat').classList.remove(...MISCHIEF_CLASSES), 3600);
-});
+setupHomeCat();
 renderHome();
 
 if ('serviceWorker' in navigator) {

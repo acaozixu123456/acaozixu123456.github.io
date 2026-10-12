@@ -18,8 +18,25 @@
   color-scheme: dark;
 }
 
+:root[data-theme="light"] {
+    --bg: #f4f1ea;
+    --glow: #fffdf7;
+    --card: rgba(80, 60, 20, .045);
+    --line: rgba(60, 45, 20, .1);
+    --text: #2b2a27;
+    --muted: #8a857c;
+    --accent: #a8823f;
+    --accent-ink: #ffffff;
+    --stir: #cf7a63;
+    --orb: #f2c27e;
+    --a1: #c9dccb;
+    --a2: #ddd2ec;
+    --a3: #f3d5c3;
+    --a4: #c8dbe9;
+    color-scheme: light;
+}
 @media (prefers-color-scheme: light) {
-  :root {
+  :root[data-theme="auto"] {
     --bg: #f4f1ea;
     --glow: #fffdf7;
     --card: rgba(80, 60, 20, .045);
@@ -437,7 +454,79 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
 .breath.mischief .stage-cat .cat .head { animation: cat-tilt 3.6s ease-in-out; }
 
 /* 摆放位置 */
-.home-cat { width: 120px; align-self: center; margin-bottom: -8px; }
+.home-cat { width: 150px; align-self: center; margin-bottom: -12px; cursor: pointer; touch-action: manipulation; }
 .stage-cat { position: absolute; left: 20%; right: 20%; bottom: 17%; }
 .done-cat { width: 150px; }
-@media (max-height: 700px) { .home-cat { width: 88px; } }
+@media (max-height: 700px) { .home-cat { width: 110px; } }
+
+/* ---------- 小猫第二版：更多细节和动作 ---------- */
+
+.cat .tail-tip { fill: none; stroke: var(--fur-dark); stroke-width: 15; stroke-linecap: round; opacity: .5; }
+.cat .collar { fill: none; stroke: #ee8ea0; stroke-width: 6; stroke-linecap: round; }
+.cat .bell circle { fill: #f5c84c; }
+.cat .bell path { stroke: #c79a2a; stroke-width: 1.4; stroke-linecap: round; }
+.cat .mouth-open { opacity: 0; transform-origin: 100px 101px; transform: scaleY(0); }
+.cat .mouth-open ellipse { fill: #7a3f3f; }
+.cat .mouth-open .tongue { fill: #f29c9c; }
+.cat .look { transform: translate(var(--lx, 0), var(--ly, 0)); transition: transform .35s cubic-bezier(.3, .8, .4, 1); }
+.cat .hearts path { fill: #f27b93; opacity: 0; }
+.cat .zzz text { font: 600 16px -apple-system, sans-serif; fill: var(--muted); opacity: 0; }
+
+/* 眨眼 */
+.blink .cat .eyes-open { animation: cat-blink .26s ease; }
+@keyframes cat-blink { 50% { transform: scaleY(.08); } }
+
+/* 打哈欠：闭眼仰头张大嘴 */
+.yawn .cat .eyes-open { opacity: 0; transform: scaleY(.1); }
+.yawn .cat .eyes-closed { opacity: 1; }
+.yawn .cat .mouth { opacity: 0; }
+.yawn .cat .mouth-open { animation: cat-yawn-mouth 2.4s ease-in-out; }
+.yawn .cat .head { animation: cat-yawn-head 2.4s ease-in-out; }
+.yawn .cat .ear-l { animation: cat-ear-l-flat 2.4s ease-in-out; }
+.yawn .cat .ear-r { animation: cat-ear-r-flat 2.4s ease-in-out; }
+@keyframes cat-yawn-mouth { 0%, 100% { opacity: 0; transform: scaleY(0); } 20%, 70% { opacity: 1; transform: scaleY(1); } }
+@keyframes cat-yawn-head { 0%, 100% { transform: none; } 30%, 65% { transform: translateY(-4px) rotate(-3deg); } }
+@keyframes cat-ear-l-flat { 30%, 65% { transform: rotate(-14deg); } }
+@keyframes cat-ear-r-flat { 30%, 65% { transform: rotate(14deg); } }
+
+/* 挥爪打招呼 */
+.wave .cat .paw-r { transform-origin: 118px 189px; animation: cat-wave 2s ease-in-out; }
+@keyframes cat-wave {
+  0%, 100% { transform: none; }
+  20% { transform: translate(14px, -58px) rotate(-10deg); }
+  35% { transform: translate(18px, -60px) rotate(18deg); }
+  50% { transform: translate(14px, -58px) rotate(-14deg); }
+  65% { transform: translate(18px, -60px) rotate(18deg); }
+  80% { transform: translate(14px, -56px) rotate(0); }
+}
+
+/* 甩尾巴 */
+.swish .cat .tail { animation: cat-swish 2.2s ease-in-out; }
+@keyframes cat-swish { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-22deg); } 45% { transform: rotate(16deg); } 70% { transform: rotate(-12deg); } }
+
+/* 伸懒腰：身子拉长再缩回 */
+.stretch .cat .hopper { transform-origin: 100px 195px; animation: cat-stretch 2.6s ease-in-out; }
+.stretch .cat .eyes-open { opacity: 0; transform: scaleY(.1); }
+.stretch .cat .eyes-closed { opacity: 1; }
+@keyframes cat-stretch { 0%, 100% { transform: none; } 35%, 55% { transform: scale(.96, 1.08); } 75% { transform: scale(1.05, .95); } }
+
+/* 被摸：眯眼笑、冒爱心、开心地扭一扭 */
+.love .cat .eyes-open { opacity: 0; transform: scaleY(.1); }
+.love .cat .eyes-happy { opacity: 1; }
+.love .cat .blush { opacity: .8; transition: opacity .3s; }
+.love .cat .hopper { transform-origin: 100px 195px; animation: cat-wiggle 1.8s ease-in-out; }
+.love .cat .hearts .h1 { animation: heart-up 1.6s ease-out; }
+.love .cat .hearts .h2 { animation: heart-up 1.6s ease-out .25s; }
+.love .cat .hearts .h3 { animation: heart-up 1.6s ease-out .45s; }
+@keyframes cat-wiggle { 0%, 100% { transform: none; } 20% { transform: rotate(-4deg) scale(1.03, .97); } 45% { transform: rotate(4deg) scale(1.03, .97); } 70% { transform: rotate(-2deg); } }
+@keyframes heart-up { 0% { opacity: 0; translate: 0 6px; scale: .5; } 25% { opacity: 1; scale: 1; } 100% { opacity: 0; translate: 0 -34px; scale: 1.1; } }
+
+/* 睡着：闭眼、头一点一点、冒 zzz */
+.sleepy .cat .head { animation: cat-doze 4s ease-in-out infinite; }
+.sleepy .cat .body-g { animation-duration: 6s; }
+.sleepy .cat .zzz .z1 { animation: z-up 3s ease-out infinite; }
+.sleepy .cat .zzz .z2 { animation: z-up 3s ease-out 1s infinite; }
+.sleepy .cat .zzz .z3 { animation: z-up 3s ease-out 2s infinite; }
+@keyframes cat-doze { 0%, 100% { transform: translateY(2px) rotate(2deg); } 50% { transform: translateY(5px) rotate(3deg); } }
+@keyframes z-up { 0% { opacity: 0; translate: -8px 12px; } 30% { opacity: .9; } 100% { opacity: 0; translate: 6px -12px; } }
+.cat .hearts path, .cat .zzz text { transform-box: fill-box; transform-origin: center; }
