@@ -99,6 +99,18 @@
       <div><b id="n-total">0</b><span>累计分钟</span></div>
     </section>
 
+    <section class="card effects">
+      <h2>练习效果 · 估算</h2>
+      <div id="effects"></div>
+      <details class="method">
+        <summary>这些数字怎么算的</summary>
+        <p>这是根据研究文献的平均结果估算的，不是对你身体的测量，个人差异很大。</p>
+        <p>数字的意思：和不练习的人比，你在这一项上大约前进了多少个百分位。比如注意力 +4.0，表示从中间水平（第 50 百分位）提高到约第 54 百分位。皮质醇和焦虑是下降，所以用负号。</p>
+        <p>算法：每次练习的分钟数按类型加权（静坐更偏注意力，呼吸更偏心率变异性），越久以前的练习权重越低（6 周减半）；效果随练习量增长但会逐渐饱和，大约每天 13 分钟坚持 8 周，接近研究里的效果。下方细线表示达到研究效果的进度。</p>
+        <ul id="effect-sources"></ul>
+      </details>
+    </section>
+
     <section class="card">
       <div class="cal-head">
         <button class="icon-btn small" id="cal-prev" aria-label="上个月">
@@ -219,12 +231,14 @@
     <h1 id="done-title">完成</h1>
     <p id="done-detail" class="center muted"></p>
     <p id="done-focus" class="focus center"></p>
+    <div id="done-effects" class="done-effects"></div>
     <button id="back" class="ghost wide">回到首页</button>
   </main>
 
   <div id="toast" class="toast" hidden></div>
 
   <script src="cat.js"></script>
+  <script src="effects.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
