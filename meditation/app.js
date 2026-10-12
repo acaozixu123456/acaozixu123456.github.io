@@ -727,7 +727,9 @@ function startSession() {
   requestWake();
   $('session').classList.toggle('breath', timer.mode === 'breath');
   document.body.classList.add('in-session');
+  timer.rising = false;
   show('session');
+  startSitting(settings.prep ? 900 : 200);
   renderSession();
   timer.tickId = setInterval(tick, 250);
   if (timer.mode === 'breath') requestAnimationFrame(animateBreath);
@@ -762,6 +764,7 @@ function tick() {
     finish(true, now);
     return;
   }
+  if (timer.phase === 'running' && !timer.rising && timer.plannedMs >= 60000 && timer.plannedMs - elapsedMs(now) <= STAND_MS + 1200) standUp();
   renderSession(now);
 }
 
@@ -821,6 +824,8 @@ function finish(completed, now = Date.now()) {
     unschedule();
   }
   timer.phase = 'idle';
+  timer.rising = false;
+  resetPose();
   Space.breath(null);
   stopNoise(completed ? 8 : 2);
   if ('speechSynthesis' in window) speechSynthesis.cancel();
@@ -872,6 +877,56 @@ function finish(completed, now = Date.now()) {
   show('done');
 }
 
+/* ---------- 小猫站起、盘腿坐下 ---------- */
+
+const SIT_MS = 3400;      // 慢慢坐下
+const STAND_MS = 3600;    // 快结束时慢慢站起
+const pose = { sit: 1, raf: 0, timer: 0 };
+
+function setSit(v) {
+  pose.sit = v;
+  $('stage-cat').style.setProperty('--sit', v.toFixed(3));
+}
+
+// 从当前姿势平滑过渡到 target；坐下时最后轻轻一沉再回稳
+function poseTo(target, ms, onTouch) {
+  cancelAnimationFrame(pose.raf);
+  const from = pose.sit, t0 = performance.now();
+  let touched = false;
+  const step = now => {
+    const p = Math.min(1, (now - t0) / ms);
+    let e = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+    if (target > from) e += Math.sin(Math.min(1, Math.max(0, (p - 0.78) / 0.22)) * Math.PI) * 0.035;
+    const v = from + (target - from) * e;
+    setSit(v);
+    if (target > from) Space.imprint(Math.max(0, (v - 0.8) / 0.2));
+    if (!touched && onTouch && (target > from ? v > 0.93 : v < 0.85)) { touched = true; onTouch(); }
+    if (p < 1) pose.raf = requestAnimationFrame(step);
+  };
+  pose.raf = requestAnimationFrame(step);
+}
+
+function startSitting(delay) {
+  clearTimeout(pose.timer);
+  cancelAnimationFrame(pose.raf);
+  setSit(0);
+  Space.imprint(0);
+  pose.timer = setTimeout(() => poseTo(1, SIT_MS, () => Space.puff('sit')), delay);
+}
+
+function standUp() {
+  timer.rising = true;
+  clearTimeout(pose.timer);
+  poseTo(0, STAND_MS, () => Space.puff('stand'));
+  renderSession();
+}
+
+function resetPose() {
+  clearTimeout(pose.timer);
+  cancelAnimationFrame(pose.raf);
+  setSit(1);
+}
+
 /* ---------- 星旅 ---------- */
 
 function doneTravelText(openBefore, sec) {
@@ -913,7 +968,8 @@ function show(id) {
   for (const el of document.querySelectorAll('.screen')) el.classList.toggle('active', el.id === id);
   window.scrollTo(0, 0);
   if (id === 'stats' || id === 'settings' || id === 'wardrobe' || id === 'starmap') stopNoise(0.8);
-  Space.mode(id === 'home' || id === 'session' || id === 'done' ? id : 'page');
+  const catHost = { home: 'home-cat', session: 'stage-cat', done: 'done-cat' }[id];
+  Space.mode(catHost ? id : 'page', catHost ? $(catHost) : null);
   document.body.dataset.screen = id;
 }
 
@@ -937,7 +993,7 @@ function renderSession(now = Date.now()) {
   const session = $('session');
   session.classList.toggle('paused', timer.phase === 'paused');
   // 准备和暂停时小猫睁着眼看你，正式开始后闭眼
-  $('stage').classList.toggle('awake', timer.phase === 'prep' || timer.phase === 'paused');
+  $('stage').classList.toggle('awake', timer.phase === 'prep' || timer.phase === 'paused' || timer.rising);
   const breath = timer.mode === 'breath';
   let fraction;
   if (timer.phase === 'prep') {
