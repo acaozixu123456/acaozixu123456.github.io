@@ -6,6 +6,7 @@ const GLSL_HEAD = `
 precision highp float;
 uniform vec2 uRes; uniform float uT; uniform float uB; uniform float uR;
 #define PI 3.14159265
+float sq(float x){return x*x;}
 mat2 rot(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);}
 float h12(vec2 p){vec3 p3=fract(vec3(p.xyx)*.1031);p3+=dot(p3,p3.yzx+33.33);return fract((p3.x+p3.y)*p3.z);}
 vec2 h22(vec2 p){vec3 p3=fract(vec3(p.xyx)*vec3(.1031,.1030,.0973));p3+=dot(p3,p3.yzx+33.33);return fract((p3.xx+p3.yz)*p3.zy);}
@@ -95,7 +96,7 @@ vec3 scene(vec2 uv){
   vec2 c=vec2(.11,.15+.008*sin(uT*.05)); float R=.095;
   vec2 d=(uv-c)/R; float rr=length(d);
   float pw=1./(R*uRes.y);
-  float sideLit=clamp(dot(normalize(d),normalize(L.xy))*.8+.35,0.,1.);
+  float sideLit=clamp(dot(normalize(d+1e-4),normalize(L.xy))*.8+.35,.22,1.);
   col+=vec3(.12,.32,1.)*exp(-(rr-1.)*7.)*step(1.,rr)*.35*sideLit*(.8+.4*uB);
   if(rr<1.){
     vec3 n=vec3(d,sqrt(1.-rr*rr));
@@ -116,9 +117,12 @@ vec3 scene(vec2 uv){
     vec3 lit=surf*dif*2.6+spec*vec3(1.,.85,.7);
     lit=mix(lit,vec3(.85,.88,.95)*dif*1.7,cl);
     float term=smoothstep(-.12,.3,nl);
-    lit+=vec3(.12,.35,1.)*pow(1.-n.z,2.5)*term*1.3;
-    float city=smoothstep(.82,.9,n3(p*70.))*isL*(1.-smoothstep(-.15,.02,nl));
-    lit+=vec3(1.,.55,.2)*city*.25;
+    lit+=vec3(.12,.35,1.)*pow(1.-n.z,2.5)*(term*1.3+.3);
+    // 夜面不是全黑：一点被月光和星光照到的海陆轮廓，加上城市灯火
+    float night=1.-smoothstep(-.15,.05,nl);
+    lit+=(surf*.12+vec3(.003,.006,.016))*night*(1.-cl*.6)+vec3(.007,.009,.013)*cl*night;
+    float city=smoothstep(.74,.86,n3(p*70.))*smoothstep(.7,.85,n3(p*9.)+.3)*isL*night;
+    lit+=vec3(1.,.6,.25)*city*(.5+.15*sin(uR*.8+p.x*40.));
     // 夜面云层里偶尔一闪的闪电
     float ls=floor(uR*1.7), lf=fract(uR*1.7);
     vec3 lp=normalize(vec3(h12(vec2(ls,1.))-.5,h12(vec2(ls,2.))-.5,.2+h12(vec2(ls,3.))*.4));
@@ -139,7 +143,7 @@ vec3 scene(vec2 uv){
     col+=vec3(1.,.95,.85)*exp(-dot(di,di)*2e5)*exp(-ip*5.)*3.;
     col+=vec3(1.,.9,.8)*exp(-dot(di,di)*1e4)*exp(-ip*3.)*.5;
     float pr=.004+ip*.004;
-    float pl=exp(-pow(length(di*vec2(1.,1.4))/pr,2.))*step(0.,di.y+.002)*(1.-ip/6.)*(.6+.4*n2(di*600.));
+    float pl=exp(-sq(length(di*vec2(1.,1.4))/pr))*step(0.,di.y+.002)*(1.-ip/6.)*(.6+.4*n2(di*600.));
     col+=vec3(.55,.53,.5)*pl*.35;
   }
   if(uv.y<yh+py){
@@ -278,7 +282,7 @@ vec3 scene(vec2 uv){
     if(tl>0.){ float kk=length(P+L*tl-C)/R; pc*=1.-.85*ringD(kk); }
     pc+=vec3(.25,.2,.12)*pow(1.-max(dot(n,-rd),0.),3.)*dif*.6;
     // 北极的极光环，亮度和形状一直在变
-    float au=exp(-pow((lat-.9)*30.,2.))*(.45+.55*n2(vec2(lon*5.+uT*.25,uR*.3)));
+    float au=exp(-sq((lat-.9)*30.))*(.45+.55*n2(vec2(lon*5.+uT*.25,uR*.3)));
     pc+=vec3(.35,.6,1.)*au*.35*(.7+.3*sin(uR*.4));
     float pw=2./uRes.y*19./2.2;
     float edge=smoothstep(0.,pw,b-sqrt(max(cc-0.,0.))*0.+sqrt(max(disc,0.)));
@@ -385,7 +389,7 @@ vec3 scene(vec2 uv){
   float sR=.045;
   float fa=h12(vec2(fid,42.))*6.28;
   vec2 fd=uv-sp; float fr=length(fd)/sR, fang=atan(fd.y,fd.x);
-  float arc=exp(-pow((fr-1.-.35*sin(clamp((fang-fa)*2.2+1.57,0.,3.14)))*9.,2.))*smoothstep(.75,.0,abs(fang-fa));
+  float arc=exp(-sq((fr-1.-.35*sin(clamp((fang-fa)*2.2+1.57,0.,3.14)))*9.))*smoothstep(.75,.0,abs(fang-fa));
   col+=vec3(1.,.4,.15)*arc*flare*(.6+.6*fbm(fd*80.-uR*.5))*1.4*step(1.,fr);
   if(ls<sR){vec2 d=(uv-sp)/sR; float mu=sqrt(1.-dot(d,d));
     float gran=fbm(d*9.+uT*.06);
@@ -499,8 +503,8 @@ vec3 scene(vec2 uv){
         float tex=fbm(q*.9+vec2(hr*2.,0.))*.7+n2(vec2(hr*22.,0.))*.45;
         // 跟着盘一起绕转的几团热斑
         float qa=atan(q.y,q.x);
-        tex+=exp(-pow((hr-4.)*2.5,2.))*pow(max(cos(qa-1.),0.),30.)*2.;
-        tex+=exp(-pow((hr-6.5)*2.,2.))*pow(max(cos(qa+2.),0.),24.)*1.4;
+        tex+=exp(-sq((hr-4.)*2.5))*pow(max(cos(qa-1.),0.),30.)*2.;
+        tex+=exp(-sq((hr-6.5)*2.))*pow(max(cos(qa+2.),0.),24.)*1.4;
         float temp=pow(2.6/hr,1.2);
         vec3 dc=mix(vec3(1.,.28,.07),vec3(1.,.86,.62),temp)*temp*3.;
         float dop=1.+.6*dot(normalize(vec3(-hp.z,0.,hp.x)),-v);
@@ -518,7 +522,7 @@ vec3 scene(vec2 uv){
   // 两极方向淡淡的喷流，里面的亮结一点点往外走
   float jy=abs(sc.y), jw=.004+jy*.05;
   float knots=.5+.7*fbm(vec2(jy*30.-uT*.6,sign(sc.y)*3.));
-  acc+=vec3(.45,.6,1.)*exp(-pow(sc.x/jw,2.))*smoothstep(.04,.1,jy)*exp(-jy*12.)*knots*.22*(.8+.4*uB);
+  acc+=vec3(.45,.6,1.)*exp(-sq(sc.x/jw))*smoothstep(.04,.1,jy)*exp(-jy*12.)*knots*.22*(.8+.4*uB)*(1.-al*.9);
   return acc;
 }` },
 
@@ -621,14 +625,14 @@ void main(){
       vec2 sd=(sp-uCat.xy-vec2(uCat.z*.5*uCat.w,uCat.z*.02))/vec2(uCat.z*1.4,uCat.z*.3);
       c*=1.-.62*exp(-dot(sd,sd)*1.6);
       float grain=n2(sp*uRes.y*.3)*.6+n2(sp*uRes.y*.08)*.4;
-      float rim=exp(-pow((r-1.05)*3.6,2.))*uImp;
+      float rim=exp(-sq((r-1.05)*3.6))*uImp;
       c*=1.+rim*(.15+.9*grain);
       c*=1.-.35*smoothstep(1.,.55,r)*uImp;
-      float clod=step(.82,n2(sp*uRes.y*.12))*exp(-pow((r-1.35)*2.2,2.))*uImp;
+      float clod=step(.82,n2(sp*uRes.y*.12))*exp(-sq((r-1.35)*2.2))*uImp;
       c*=1.-clod*.35;
     } else {
       c+=vec3(.45,.55,1.)*exp(-r*r*1.3)*.1;
-      c+=vec3(.7,.8,1.)*exp(-pow((r-1.)*5.,2.))*.05*(.6+.6*uB);
+      c+=vec3(.7,.8,1.)*exp(-sq((r-1.)*5.))*.05*(.6+.6*uB);
     }
   }
   c=1.-exp(-c*1.15);
@@ -657,7 +661,7 @@ const DUST_STYLES = {
 
 const Space = (() => {
   let canvas, overlay, gl, o2, buf;
-  let w = 0, h = 0, dpr = 1, scale = 0, quality = 1;
+  let w = 0, h = 0, dpr = 1, gdpr = 1, scale = 0, quality = 1;
   let cur = null, warp = null, last = 0, lastRaf = 0, slow = 0, running = false;
   let t = 20, rt = 3, mode = SPACE_MODES.home, dim = 1, zoom = mode.zoom, breath = null;
   let shift = null, catEl = null, cat = [0, 0, 0, 1], imprint = 1;
@@ -697,6 +701,7 @@ const Space = (() => {
 
   function size() {
     dpr = Math.min(devicePixelRatio || 1, 2);
+    gdpr = Math.min(dpr, 1.5);
     w = innerWidth; h = innerHeight; scale = 0;
     overlay.width = Math.round(w * dpr); overlay.height = Math.round(h * dpr);
   }
@@ -740,7 +745,7 @@ const Space = (() => {
   }
 
   function draw(id, b) {
-    const s = dpr * SCENES[id].q * quality;
+    const s = gdpr * SCENES[id].q * quality;
     if (Math.abs(s - scale) > 1e-3) { scale = s; canvas.width = Math.round(w * s); canvas.height = Math.round(h * s); }
     const P = prog(id);
     gl.viewport(0, 0, canvas.width, canvas.height);
