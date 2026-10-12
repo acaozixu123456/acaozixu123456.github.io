@@ -703,13 +703,12 @@ body.space-on .screen { text-shadow: 0 1px 10px rgba(0, 0, 0, .35); }
 
 /* ---------- 小猫站起和盘腿坐（--sit：0 站着，1 盘腿坐好，由脚本驱动） ---------- */
 
-.cat .legs, .cat .lotus { display: none; }
-.cat .lotus .crease { fill: none; stroke: var(--fur-dark); stroke-width: 2; stroke-linecap: round; opacity: .45; }
-.cat .lotus .pad { fill: var(--cat-pink); opacity: .75; }
-.lotus-mode .cat .legs, .lotus-mode .cat .lotus { display: inline; }
-.lotus-mode .cat .poser { transform: translateY(calc((1 - var(--sit, 1)) * -26px)); }
-.lotus-mode .cat .legs { transform-origin: 100px 200px; transform: scaleY(calc(1 - var(--sit, 1))); opacity: calc(1.6 - var(--sit, 1) * 1.6); }
-.lotus-mode .cat .lotus { transform-origin: 100px 192px; transform: scaleX(calc(.6 + var(--sit, 1) * .4)); opacity: calc((var(--sit, 1) - .5) * 2.2); }
+.cat .legs, .cat .thighs { display: none; }
+.lotus-mode .cat .legs, .lotus-mode .cat .thighs { display: inline; }
+.cat .limb { fill: none; stroke: var(--fur); stroke-width: 21; stroke-linecap: round; stroke-linejoin: round; }
+.cat .leg .crease { fill: none; stroke: var(--fur-dark); stroke-width: 2; stroke-linecap: round; }
+.cat .foot .pad { fill: var(--cat-pink); }
+.lotus-mode .cat .poser { transform-origin: 100px 190px; }
 .lotus-mode .cat .pawpos-l { transform: translate(calc(-14px - var(--sit, 1) * 8px), calc(-20px + var(--sit, 1) * 13px)); }
 .lotus-mode .cat .pawpos-r { transform: translate(calc(14px + var(--sit, 1) * 8px), calc(-20px + var(--sit, 1) * 13px)); }
 .lotus-mode .cat .shadow { transform-origin: 100px 197px; transform: scale(calc(.75 + var(--sit, 1) * .25)); }
