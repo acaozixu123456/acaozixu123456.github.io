@@ -319,10 +319,43 @@
     </div>
   </div>
 
+  <!-- 画板：直接在小猫身上画 -->
+  <div class="painter" id="painter" hidden>
+    <header class="pt-top">
+      <button class="text-btn muted" id="pt-cancel">取消</button>
+      <div class="pt-history">
+        <button class="icon-btn small" id="pt-undo" aria-label="撤销"><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-4"/></svg></button>
+        <button class="icon-btn small" id="pt-redo" aria-label="重做"><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h4"/></svg></button>
+        <button class="icon-btn small" id="pt-fit" aria-label="还原大小"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      </div>
+      <button class="text-btn" id="pt-done">完成</button>
+    </header>
+    <div class="pt-canvas" id="pt-canvas">
+      <div class="pt-zoom" id="pt-zoom"><div class="cat-host awake still" id="paint-cat" aria-hidden="true"></div></div>
+      <div class="pt-ring" id="pt-ring"></div>
+    </div>
+    <div class="pt-tools">
+      <div class="pt-row">
+        <div class="segmented pt-mode" id="pt-mode">
+          <button data-tool="brush" class="on">画笔</button>
+          <button data-tool="soft">柔边</button>
+          <button data-tool="eraser">橡皮</button>
+        </div>
+        <button class="pt-toggle on" id="pt-mirror">对称</button>
+        <button class="pt-toggle on" id="pt-clip">不出界</button>
+      </div>
+      <label class="pt-slider"><span>粗细</span><input type="range" id="pt-size" min="1" max="40" value="8"><span class="pt-end"><i id="pt-size-dot"></i></span></label>
+      <label class="pt-slider"><span>浓淡</span><input type="range" id="pt-alpha" min="10" max="100" value="100"><span class="pt-end" id="pt-alpha-val">100%</span></label>
+      <div class="pt-colors" id="pt-colors"></div>
+      <button class="text-btn muted pt-clear" id="pt-clear">清空</button>
+    </div>
+  </div>
+
   <div id="toast" class="toast" hidden></div>
 
   <script src="cat.js"></script>
   <script src="custom.js"></script>
+  <script src="paint.js"></script>
   <script src="effects.js"></script>
   <script src="wardrobe.js"></script>
   <script src="space.js"></script>
