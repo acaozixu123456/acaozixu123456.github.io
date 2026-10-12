@@ -97,7 +97,7 @@ function hasNewPlace(st) {
 const MAP_ROW = 96;
 const MAP_REGION_GAP = 70;
 const MAP_PAD = 90;
-const MINI_CAT = '<svg class="sm-cat" viewBox="40 10 120 120" aria-hidden="true"><path fill="#f0b47a" d="M52 66 Q46 24 58 17 Q72 18 94 42 Z M148 66 Q154 24 142 17 Q128 18 106 42 Z"/><ellipse fill="#f0b47a" cx="100" cy="78" rx="57" ry="46"/><path d="M71 83 Q80 91 89 83 M111 83 Q120 91 129 83" stroke="#4e3a2c" stroke-width="5" fill="none" stroke-linecap="round"/><path fill="#f29c9c" d="M96.5 94 h7 l-3.5 4 z"/></svg>';
+const MINI_CAT = '<svg class="sm-cat" viewBox="26 8 148 132" aria-hidden="true"><path fill="#a68a64" d="M42 74 Q34 30 48 16 Q56 10 66 16 Q82 26 96 42 Z M158 74 Q166 30 152 16 Q144 10 134 16 Q118 26 104 42 Z"/><ellipse fill="#a68a64" cx="100" cy="84" rx="64" ry="51"/><path fill="#fbf7f1" d="M58 120 Q100 96 142 120 Q124 135 100 135 Q76 135 58 120 Z"/><ellipse fill="#dcb48a" cx="100" cy="110" rx="15" ry="9"/><path d="M100 34 v18 M88 35 l3 17 M112 35 l-3 17 M76 40 l5 16 M124 40 l-5 16" stroke="#211913" stroke-width="6" stroke-linecap="round"/><path d="M61 94 Q72 102 83 94 M117 94 Q128 102 139 94" stroke="#2a1f19" stroke-width="5" fill="none" stroke-linecap="round"/><path fill="#d4837a" d="M96 103 h8 l-4 5 z"/></svg>';
 
 function shortDate(iso) {
   const d = new Date(iso);
