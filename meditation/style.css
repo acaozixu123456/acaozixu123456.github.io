@@ -889,9 +889,34 @@ body.space-on .screen { text-shadow: 0 1px 10px rgba(0, 0, 0, .35); }
 .cat .leg .crease { fill: none; stroke: var(--fur-dark); stroke-width: 2; stroke-linecap: round; }
 .cat .foot .pad { fill: var(--cat-pink); }
 .lotus-mode .cat .poser { transform-origin: 100px 190px; }
-.lotus-mode .cat .pawpos-l { transform: translate(calc(-14px - var(--sit, 1) * 8px), calc(-20px + var(--sit, 1) * 13px)); }
-.lotus-mode .cat .pawpos-r { transform: translate(calc(14px + var(--sit, 1) * 8px), calc(-20px + var(--sit, 1) * 13px)); }
+.lotus-mode .cat .pawpos-l { transform: translate(calc(-14px - var(--sit, 1) * 8px), calc(-20px + var(--sit, 1) * 13px + var(--swl, 0px))); }
+.lotus-mode .cat .pawpos-r { transform: translate(calc(14px + var(--sit, 1) * 8px), calc(-20px + var(--sit, 1) * 13px + var(--swr, 0px))); }
 .lotus-mode .cat .shadow { transform-origin: 100px 197px; transform: scale(calc(.75 + var(--sit, 1) * .25)); }
+
+/* ---------- 步行：拿铁一步一步走，每次落脚漾开一圈 ---------- */
+
+.walk .ripples { display: none; }
+.walk .glow { inset: 22%; animation-duration: 6s; }
+/* 迈步时眯成笑眼，停下来就睁眼看你 */
+#session.walk .stage.walking .cat .eyes-open { opacity: 0; transform: scaleY(.1); }
+#session.walk .stage.walking .cat .eyes-happy { opacity: 1; }
+#session.walk .stage.walking .cat .tail { animation-duration: 2.6s; }
+#session.walk .stage.mischief .cat .eyes-happy { opacity: 0; }
+.footfalls { position: absolute; left: 20%; right: 20%; bottom: 17%; aspect-ratio: 200 / 210; pointer-events: none; }
+.foot-ripple {
+  position: absolute; top: calc(191 / 210 * 100%); width: 24%; aspect-ratio: 3.2; margin: -3.75% 0 0 -12%;
+  border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  opacity: 0; animation: foot-ripple 1.5s cubic-bezier(.2, .7, .3, 1) forwards;
+}
+.foot-ripple.l { left: 42.5%; }
+.foot-ripple.r { left: 57.5%; }
+@keyframes foot-ripple { 0% { transform: scale(.35); opacity: .75; } 100% { transform: scale(1.9); opacity: 0; } }
+/* 口袋模式：画面调暗，文字和按钮隐去，轻点一下回来 */
+#session .phase, #session .readout, #session .controls { transition: opacity 1.2s ease; }
+#session.pocket .phase, #session.pocket .readout, #session.pocket .controls { opacity: 0; }
+#session.pocket .controls { pointer-events: none; }
+#session.pocket .hint { opacity: .45; }
+@media (prefers-reduced-motion: reduce) { .foot-ripple { display: none; } }
 
 /* 坐下、起身时扬起的灰尘 */
 .dust { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }
