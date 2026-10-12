@@ -125,3 +125,12 @@ h2 { font-size: 14px; font-weight: 500; color: var(--muted); margin: 0 0 12px; l
 .controls { display: flex; gap: 16px; }
 
 .done-mark { font-size: 72px; color: var(--accent); line-height: 1; }
+
+.ghost.armed, .log .del.armed { color: var(--danger); border-color: var(--danger); }
+.log .del.armed { font-size: 14px; }
+.toast {
+  position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 24px); transform: translateX(-50%);
+  background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 10px 18px; font-size: 14px;
+  max-width: calc(100% - 32px);
+}
+.toast[hidden] { display: none; }

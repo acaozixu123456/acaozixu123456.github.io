@@ -262,6 +262,7 @@ function startSession() {
   timer.intervalMs = settings.interval * 60 * 1000;
   timer.elapsedBefore = 0;
   timer.startedAt = null;
+  stopArmedUntil = 0;
   const now = Date.now();
   if (settings.prep) {
     timer.phase = 'prep';
@@ -322,12 +323,22 @@ function togglePause() {
   renderSession(now);
 }
 
+let stopArmedUntil = 0;
+
 function stopEarly() {
   if (timer.phase === 'prep') {
     finish(false);
     return;
   }
-  if (confirm('提前结束这次冥想？')) finish(false);
+  // 不用系统弹窗（在一些环境里会被拦截），改为 3 秒内再点一次确认
+  const now = Date.now();
+  if (now < stopArmedUntil) {
+    stopArmedUntil = 0;
+    finish(false);
+    return;
+  }
+  stopArmedUntil = now + 3000;
+  renderSession(now);
 }
 
 function finish(completed, now = Date.now()) {
@@ -415,6 +426,7 @@ function renderSession(now = Date.now()) {
     $('session-hint').textContent = '坐好，放松肩膀。轻点圆圈可跳过准备。';
     $('pause').hidden = true;
     $('stop').textContent = '取消';
+    $('stop').classList.remove('armed');
     fraction = left / (PREP_SEC * 1000);
   } else {
     const left = timer.plannedMs - elapsedMs(now);
@@ -423,7 +435,8 @@ function renderSession(now = Date.now()) {
     $('session-hint').textContent = timer.phase === 'paused' ? '' : '专注呼吸。';
     $('pause').hidden = false;
     $('pause').textContent = timer.phase === 'paused' ? '继续' : '暂停';
-    $('stop').textContent = '结束';
+    $('stop').textContent = now < stopArmedUntil ? '再点一次结束' : '结束';
+    $('stop').classList.toggle('armed', now < stopArmedUntil);
     fraction = left / timer.plannedMs;
   }
   ring.style.strokeDashoffset = String(RING_LEN * (1 - Math.max(0, Math.min(1, fraction))));
@@ -460,7 +473,12 @@ function renderHome() {
     del.setAttribute('aria-label', '删除这条记录');
     del.textContent = '×';
     del.addEventListener('click', () => {
-      if (!confirm('删除这条记录？')) return;
+      if (!del.classList.contains('armed')) {
+        del.classList.add('armed');
+        del.textContent = '删除？';
+        setTimeout(() => { del.classList.remove('armed'); del.textContent = '×'; }, 3000);
+        return;
+      }
       log = log.filter(x => x !== e);
       saveLog();
       renderHome();
@@ -471,6 +489,15 @@ function renderHome() {
     list.append(li);
   }
   $('log-empty').hidden = log.length > 0;
+}
+
+let toastTimer = null;
+function toast(text) {
+  const el = $('toast');
+  el.textContent = text;
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.hidden = true; }, 3000);
 }
 
 function setMinutes(m) {
@@ -518,9 +545,9 @@ async function importLog(file) {
     }
     saveLog();
     renderHome();
-    alert(`导入完成，新增 ${added} 条记录。`);
+    toast(`导入完成，新增 ${added} 条记录。`);
   } catch {
-    alert('这个文件不是有效的备份。');
+    toast('这个文件不是有效的备份。');
   }
 }
 
