@@ -16,6 +16,9 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- 缓慢流动的背景光晕 -->
+  <div class="aurora" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+
   <!-- 首页 -->
   <main id="home" class="screen active">
     <header class="topbar">
@@ -31,6 +34,7 @@
     </header>
 
     <div class="home-body">
+      <div class="cat-host home-cat" id="home-cat" aria-hidden="true"></div>
       <div class="segmented" id="mode" role="tablist">
         <button data-mode="timer">静坐</button>
         <button data-mode="breath">呼吸</button>
@@ -148,6 +152,10 @@
         <span>计时中屏幕常亮</span>
         <input type="checkbox" id="wake" class="switch">
       </label>
+      <label class="row">
+        <span>专注检测<small>离开 app、碰屏幕或拿起手机会被记下</small></span>
+        <input type="checkbox" id="focus-detect" class="switch">
+      </label>
     </section>
 
     <section class="card">
@@ -175,14 +183,19 @@
         <circle class="ring-bg" cx="100" cy="100" r="90"/>
         <circle class="ring-fg" id="ring" cx="100" cy="100" r="90"/>
       </svg>
+      <div class="glow" aria-hidden="true"></div>
+      <div class="ripples" aria-hidden="true"><i></i><i></i><i></i></div>
       <div class="orb-guide" aria-hidden="true"></div>
       <div class="orb" id="orb" aria-hidden="true"></div>
-      <div class="center-text">
-        <div class="time" id="time">10</div>
-        <div class="sub" id="sub"></div>
-      </div>
+      <svg class="marks" viewBox="0 0 200 200" aria-hidden="true"><g id="marks"></g></svg>
+      <div class="cat-host stage-cat" id="stage-cat" aria-hidden="true"></div>
+    </div>
+    <div class="readout">
+      <div class="time" id="time">10</div>
+      <div class="sub" id="sub"></div>
     </div>
     <p class="hint center" id="session-hint"></p>
+    <p class="focus" id="focus"></p>
     <div class="controls">
       <button id="pause" class="ghost">暂停</button>
       <button id="stop" class="ghost">结束</button>
@@ -191,14 +204,16 @@
 
   <!-- 完成页 -->
   <main id="done" class="screen">
-    <div class="done-mark" aria-hidden="true"></div>
+    <div class="cat-host done-cat" id="done-cat" aria-hidden="true"></div>
     <h1 id="done-title">完成</h1>
     <p id="done-detail" class="center muted"></p>
+    <p id="done-focus" class="focus center"></p>
     <button id="back" class="ghost wide">回到首页</button>
   </main>
 
   <div id="toast" class="toast" hidden></div>
 
+  <script src="cat.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

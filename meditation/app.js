@@ -6,7 +6,7 @@ const LOG_KEY = 'meditation.log.v1';
 const SETTINGS_KEY = 'meditation.settings.v1';
 const DEFAULTS = {
   minutes: 10, interval: 0, prep: true, wake: true, volume: 0.7,
-  mode: 'timer', pattern: '478', sound: 'none', noiseVolume: 0.5,
+  mode: 'timer', pattern: '478', sound: 'none', noiseVolume: 0.5, focus: true,
 };
 const PREP_SEC = 10;
 const MIN_SAVE_SEC = 60;
@@ -448,6 +448,144 @@ function breathState(ms, pattern) {
   return { label: '', count: 0, scale: ORB_MIN };
 }
 
+/* ---------- 专注检测：离开 app、碰屏幕、拿起手机 ---------- */
+
+const GRACE_MS = 6000;     // 刚开始或刚继续时，留时间把手机放下
+const MERGE_MS = 8000;     // 连续的动作算作一次
+const LEAVE_MIN_MS = 3000; // 离开不到 3 秒不算
+const FOCUS_TEXT = { leave: '离开了 app', touch: '碰了屏幕', move: '拿起了手机' };
+
+const focus = {
+  on: false,
+  count: 0,
+  kinds: { leave: 0, touch: 0, move: 0 },
+  marks: [],
+  lastAt: 0,
+  graceUntil: 0,
+  hiddenAt: 0,
+  alertUntil: 0,
+  stirTimer: null,
+};
+let motionGranted = false;
+let motionListening = false;
+
+function resetFocus(now) {
+  focus.on = settings.focus;
+  focus.count = 0;
+  focus.kinds = { leave: 0, touch: 0, move: 0 };
+  focus.marks = [];
+  focus.lastAt = 0;
+  focus.hiddenAt = 0;
+  focus.alertUntil = 0;
+  focus.graceUntil = now + GRACE_MS;
+  $('marks').textContent = '';
+}
+
+// iPhone 需要在点击里申请“运动与方向”权限，只问一次
+function requestMotion() {
+  if (!settings.focus || motionListening || !('DeviceMotionEvent' in window)) return;
+  const listen = () => {
+    if (motionListening) return;
+    motionListening = true;
+    window.addEventListener('devicemotion', onMotion);
+  };
+  if (typeof DeviceMotionEvent.requestPermission === 'function') {
+    DeviceMotionEvent.requestPermission()
+      .then(state => { if (state === 'granted') { motionGranted = true; listen(); } })
+      .catch(() => {});
+  } else {
+    motionGranted = true;
+    listen();
+  }
+}
+
+function onMotion(e) {
+  if (timer.phase !== 'running' || !focus.on) return;
+  const a = e.acceleration;
+  const r = e.rotationRate;
+  const acc = a && a.x != null ? Math.hypot(a.x, a.y, a.z) : 0;
+  const rot = r && r.alpha != null ? Math.hypot(r.alpha, r.beta, r.gamma) : 0;
+  if (acc > 1.2 || rot > 40) disturb('move');
+}
+
+function disturb(kind, now = Date.now()) {
+  if (!focus.on || timer.phase !== 'running' || now < focus.graceUntil) return;
+  const merged = now - focus.lastAt < MERGE_MS;
+  focus.lastAt = now;
+  if (merged) return;
+  focus.count++;
+  focus.kinds[kind]++;
+  focus.alertUntil = now + 4000;
+  focus.alertText = FOCUS_TEXT[kind];
+  addMark(Math.min(1, elapsedMs(now) / timer.plannedMs));
+  stir();
+  renderFocus(now);
+}
+
+// 进度环上在分心的位置留一个小点
+function addMark(fraction) {
+  const angle = fraction * 2 * Math.PI;
+  const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  c.setAttribute('cx', String(100 - 90 * Math.sin(angle))); // 进度环从顶部逆时针走空
+  c.setAttribute('cy', String(100 - 90 * Math.cos(angle)));
+  c.setAttribute('r', '3.2');
+  $('marks').append(c);
+}
+
+const MISCHIEF = [['m-peek', '?'], ['m-yarn', '喵'], ['m-hop', '!']];
+const MISCHIEF_CLASSES = ['mischief', ...MISCHIEF.map(m => m[0])];
+
+// 让小猫捣蛋一下：歪头、玩毛线球、蹦跳轮流来
+function catMischief(host, index) {
+  const [cls, text] = MISCHIEF[index % MISCHIEF.length];
+  host.classList.remove(...MISCHIEF_CLASSES);
+  void host.offsetWidth; // 重新触发动画
+  host.classList.add('mischief', cls);
+  const bubble = host.querySelector('.bubble text');
+  if (bubble) bubble.textContent = text;
+}
+
+// 画面褪色、水面起波纹、小猫开始捣蛋，之后慢慢恢复平静
+function stir() {
+  document.body.classList.add('stirred');
+  const stage = $('stage');
+  stage.classList.add('stir');
+  catMischief(stage, focus.count - 1);
+  clearTimeout(focus.stirTimer);
+  focus.stirTimer = setTimeout(calm, 4000);
+}
+
+function calm() {
+  document.body.classList.remove('stirred');
+  $('stage').classList.remove('stir', ...MISCHIEF_CLASSES);
+}
+
+function renderFocus(now = Date.now()) {
+  const el = $('focus');
+  if (!focus.on || timer.phase === 'prep') {
+    el.textContent = '';
+    el.className = 'focus';
+    return;
+  }
+  if (now < focus.alertUntil) {
+    el.textContent = focus.alertText;
+    el.className = 'focus alert';
+  } else if (focus.count === 0) {
+    el.textContent = '心无旁骛';
+    el.className = 'focus clean';
+  } else {
+    el.textContent = `分心 ${focus.count} 次`;
+    el.className = 'focus';
+  }
+}
+
+function focusSummary() {
+  if (!focus.on) return '';
+  if (focus.count === 0) return '全程专注，没有碰手机';
+  const parts = Object.entries(focus.kinds).filter(([, n]) => n).map(([k, n]) => `${FOCUS_TEXT[k]} ${n} 次`);
+  return `分心 ${focus.count} 次：${parts.join('，')}`;
+}
+
 /* ---------- 计时器 ---------- */
 
 // 所有时间都按真实时钟（Date.now）计算，切到后台再回来会自动校正
@@ -521,7 +659,9 @@ function startSession() {
   timer.pattern = PATTERNS[settings.pattern] || PATTERNS['478'];
   timer.sound = settings.sound;
   stopArmedUntil = 0;
+  requestMotion();
   const now = Date.now();
+  resetFocus(now);
   if (settings.prep) {
     timer.phase = 'prep';
     timer.prepEndsAt = now + PREP_SEC * 1000;
@@ -533,6 +673,7 @@ function startSession() {
   startNoise(timer.sound, 4);
   requestWake();
   $('session').classList.toggle('breath', timer.mode === 'breath');
+  document.body.classList.add('in-session');
   show('session');
   renderSession();
   timer.tickId = setInterval(tick, 250);
@@ -540,6 +681,7 @@ function startSession() {
 }
 
 function beginRunning(now) {
+  focus.graceUntil = Math.max(focus.graceUntil, now + GRACE_MS);
   timer.phase = 'running';
   timer.segStart = now;
   timer.startedAt = new Date(now).toISOString();
@@ -580,6 +722,7 @@ function togglePause() {
   } else if (timer.phase === 'paused') {
     timer.phase = 'running';
     timer.segStart = now;
+    focus.graceUntil = now + GRACE_MS;
     schedule(now);
     startNoise(timer.sound, 1.5);
   }
@@ -624,6 +767,9 @@ function finish(completed, now = Date.now()) {
   }
   timer.phase = 'idle';
   stopNoise(completed ? 8 : 2);
+  clearTimeout(focus.stirTimer);
+  calm();
+  document.body.classList.remove('in-session');
   // 等结束钟响完再停掉保活音
   setTimeout(() => { if (timer.phase === 'idle') stopKeepAlive(); }, 12000);
   releaseWake();
@@ -639,6 +785,7 @@ function finish(completed, now = Date.now()) {
   if (savedEntry) {
     const entry = { start: timer.startedAt, sec, planned: Math.round(timer.plannedMs / 1000) };
     if (timer.mode === 'breath') entry.mode = 'breath';
+    if (focus.on) entry.distractions = focus.count;
     log.push(entry);
     saveLog();
   }
@@ -651,6 +798,12 @@ function finish(completed, now = Date.now()) {
   const s = stats();
   $('done-title').textContent = completed ? '完成' : '已结束';
   $('done-detail').textContent = `这次${timer.mode === 'breath' ? '呼吸练习' : ''} ${formatDuration(sec)}，已连续 ${s.streak} 天`;
+  $('done-focus').textContent = focusSummary();
+  $('done-focus').className = `focus center${focus.on && focus.count === 0 ? ' clean' : ''}`;
+  const messy = focus.on && focus.count > 0;
+  $('done-cat').classList.toggle('happy', !messy);
+  $('done-cat').classList.toggle('messy', messy);
+  $('done-cat').classList.toggle('awake', messy);
   show('done');
 }
 
@@ -684,6 +837,8 @@ function formatDuration(sec) {
 function renderSession(now = Date.now()) {
   const session = $('session');
   session.classList.toggle('paused', timer.phase === 'paused');
+  // 准备和暂停时小猫睁着眼看你，正式开始后闭眼
+  $('stage').classList.toggle('awake', timer.phase === 'prep' || timer.phase === 'paused');
   const breath = timer.mode === 'breath';
   let fraction;
   if (timer.phase === 'prep') {
@@ -716,6 +871,7 @@ function renderSession(now = Date.now()) {
   }
   $('ring').style.strokeDashoffset = String(RING_LEN * (1 - Math.max(0, Math.min(1, fraction))));
   if (breath) renderBreath(now);
+  renderFocus(now);
 }
 
 function renderBreath(now = Date.now()) {
@@ -723,11 +879,14 @@ function renderBreath(now = Date.now()) {
   if (timer.phase === 'prep') {
     orb.style.transform = `scale(${ORB_MIN})`;
     orb.style.opacity = '0.35';
+    $('stage').style.setProperty('--b', '0');
     return;
   }
   const st = breathState(elapsedMs(now), timer.pattern);
   orb.style.transform = `scale(${st.scale.toFixed(4)})`;
-  orb.style.opacity = String(0.35 + 0.4 * (st.scale - ORB_MIN) / (ORB_MAX - ORB_MIN));
+  const b = (st.scale - ORB_MIN) / (ORB_MAX - ORB_MIN);
+  orb.style.opacity = String(0.35 + 0.4 * b);
+  $('stage').style.setProperty('--b', b.toFixed(3));
   if ($('time').textContent !== st.label) $('time').textContent = st.label;
   const count = String(st.count);
   if ($('sub').textContent !== count) $('sub').textContent = count;
@@ -761,6 +920,7 @@ function renderSettings() {
   $('interval').value = String(settings.interval);
   $('prep').checked = settings.prep;
   $('wake').checked = settings.wake;
+  $('focus-detect').checked = settings.focus;
   $('volume').value = String(settings.volume);
   $('noise-volume').value = String(settings.noiseVolume);
 }
@@ -860,6 +1020,12 @@ function renderStats(now = new Date()) {
       tag.textContent = '呼吸';
       when.append(tag);
     }
+    if (e.distractions > 0) {
+      const tag = document.createElement('span');
+      tag.className = 'tag muted-tag';
+      tag.textContent = `分心 ${e.distractions}`;
+      when.append(tag);
+    }
     const dur = document.createElement('span');
     dur.textContent = formatDuration(e.sec);
     const del = document.createElement('button');
@@ -935,6 +1101,7 @@ async function importLog(file) {
       if (known.has(e.start)) continue;
       const entry = { start: e.start, sec: Math.round(e.sec), planned: Math.round(e.planned || e.sec) };
       if (e.mode === 'breath') entry.mode = 'breath';
+      if (Number.isInteger(e.distractions) && e.distractions >= 0) entry.distractions = e.distractions;
       log.push(entry);
       known.add(e.start);
       added++;
@@ -997,6 +1164,16 @@ $('cal-next').addEventListener('click', () => {
 $('interval').addEventListener('change', e => { settings.interval = Number(e.target.value); saveSettings(); });
 $('prep').addEventListener('change', e => { settings.prep = e.target.checked; saveSettings(); });
 $('wake').addEventListener('change', e => { settings.wake = e.target.checked; saveSettings(); });
+$('focus-detect').addEventListener('change', e => {
+  settings.focus = e.target.checked;
+  saveSettings();
+  if (settings.focus) requestMotion();
+});
+
+// 计时中碰到屏幕（按钮除外）
+$('session').addEventListener('pointerdown', e => {
+  if (!e.target.closest('button')) disturb('touch');
+});
 $('volume').addEventListener('input', e => {
   settings.volume = Number(e.target.value);
   if (master) master.gain.value = settings.volume;
@@ -1022,7 +1199,17 @@ $('import').addEventListener('change', e => {
 });
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState !== 'visible' || timer.phase === 'idle') return;
+  if (document.visibilityState === 'hidden') {
+    if (timer.phase === 'running') focus.hiddenAt = Date.now();
+    return;
+  }
+  if (timer.phase === 'idle') return;
+  // 屏幕常亮打开时，中途离开 app 算一次分心（锁屏也会被算进去）
+  if (focus.hiddenAt && settings.wake && Date.now() - focus.hiddenAt > LEAVE_MIN_MS) {
+    focus.graceUntil = 0;
+    disturb('leave');
+  }
+  focus.hiddenAt = 0;
   // 回到前台：恢复音频、重新申请常亮、按真实时间校正
   ensureAudio();
   requestWake();
@@ -1030,6 +1217,14 @@ document.addEventListener('visibilitychange', () => {
   if ((timer.phase === 'prep' || timer.phase === 'running') && !audioClockHealthy()) schedule();
 });
 
+mountCats();
+// 首页轻点小猫，它会歪头看你
+let homeCatTimer = null;
+$('home-cat').addEventListener('click', () => {
+  catMischief($('home-cat'), 0);
+  clearTimeout(homeCatTimer);
+  homeCatTimer = setTimeout(() => $('home-cat').classList.remove(...MISCHIEF_CLASSES), 3600);
+});
 renderHome();
 
 if ('serviceWorker' in navigator) {
