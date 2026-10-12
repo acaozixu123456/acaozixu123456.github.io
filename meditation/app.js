@@ -6,7 +6,7 @@ const LOG_KEY = 'meditation.log.v1';
 const SETTINGS_KEY = 'meditation.settings.v1';
 const DEFAULTS = {
   minutes: 10, interval: 0, prep: true, wake: true, volume: 0.7,
-  mode: 'timer', pattern: '478', sound: 'none', noiseVolume: 0.5, focus: true, theme: 'dark',
+  mode: 'timer', pattern: '478', sound: 'none', noiseVolume: 0.5, focus: true, theme: 'dark', cue: 'tone',
 };
 const PREP_SEC = 10;
 const MIN_SAVE_SEC = 60;
@@ -431,21 +431,69 @@ const ORB_MAX = 1;
 // 按已练习的时间算出当前处在哪一步、圆有多大
 function breathState(ms, pattern) {
   const cycle = pattern.steps.reduce((sum, st) => sum + st[1], 0);
+  const round = Math.floor(ms / 1000 / cycle);
   let t = (ms / 1000) % cycle;
   let level = ORB_MIN;
-  for (const [label, dur, kind] of pattern.steps) {
+  for (const [i, [label, dur, kind]] of pattern.steps.entries()) {
     if (t < dur) {
       const ease = (1 - Math.cos(Math.PI * t / dur)) / 2;
       let scale = level;
       if (kind === 'in') scale = ORB_MIN + (ORB_MAX - ORB_MIN) * ease;
       if (kind === 'out') scale = ORB_MAX - (ORB_MAX - ORB_MIN) * ease;
-      return { label, count: Math.ceil(dur - t), scale };
+      return { label, kind, step: round * pattern.steps.length + i, count: Math.ceil(dur - t), scale };
     }
     t -= dur;
     if (kind === 'in') level = ORB_MAX;
     if (kind === 'out') level = ORB_MIN;
   }
-  return { label: '', count: 0, scale: ORB_MIN };
+  return { label: '', kind: '', step: -1, count: 0, scale: ORB_MIN };
+}
+
+/* ---------- 呼吸提示：闭着眼也能跟上节奏 ---------- */
+
+// 吸气音往上滑，呼气音往下滑，屏息一声轻点
+function cueTone(kind) {
+  ensureAudio();
+  const t0 = ctx.currentTime + 0.02;
+  const [f1, f2, len, amp] = {
+    in: [330, 440, 1.1, 0.16],
+    out: [440, 294, 1.3, 0.16],
+    hold: [392, 392, 0.5, 0.08],
+  }[kind];
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(f1, t0);
+  o.frequency.exponentialRampToValueAtTime(f2, t0 + len * 0.8);
+  g.gain.setValueAtTime(0, t0);
+  g.gain.linearRampToValueAtTime(amp, t0 + 0.08);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + len);
+  o.connect(g).connect(master);
+  o.start(t0);
+  o.stop(t0 + len + 0.05);
+}
+
+function cueVoice(text) {
+  if (!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'zh-CN';
+  u.rate = 0.75;
+  u.volume = Math.min(1, settings.volume + 0.2);
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+
+function breathCue(st) {
+  if (settings.cue === 'tone') cueTone(st.kind);
+  else if (settings.cue === 'voice') cueVoice(st.label);
+}
+
+// iPhone 要在点击里先说一句（空的也行），之后才能自动朗读
+function unlockVoice() {
+  if (settings.cue !== 'voice' || !('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(' ');
+  u.volume = 0;
+  speechSynthesis.speak(u);
 }
 
 /* ---------- 专注检测：离开 app、碰屏幕、拿起手机 ---------- */
@@ -662,7 +710,9 @@ function startSession() {
   timer.pattern = PATTERNS[settings.pattern] || PATTERNS['478'];
   timer.sound = settings.sound;
   stopArmedUntil = 0;
+  timer.lastStep = -1;
   requestMotion();
+  unlockVoice();
   const now = Date.now();
   resetFocus(now);
   if (settings.prep) {
@@ -726,6 +776,7 @@ function togglePause() {
     timer.phase = 'running';
     timer.segStart = now;
     focus.graceUntil = now + GRACE_MS;
+    timer.lastStep = -1; // 继续时提示当前这一步
     schedule(now);
     startNoise(timer.sound, 1.5);
   }
@@ -770,6 +821,7 @@ function finish(completed, now = Date.now()) {
   }
   timer.phase = 'idle';
   stopNoise(completed ? 8 : 2);
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
   clearTimeout(focus.stirTimer);
   calm();
   document.body.classList.remove('in-session');
@@ -799,6 +851,11 @@ function finish(completed, now = Date.now()) {
     return;
   }
   renderDoneEffects(savedEntry ? log.filter(e => e.start !== timer.startedAt) : null);
+  const newEntry = savedEntry ? log.find(e => e.start === timer.startedAt) : null;
+  const fish = newEntry ? fishForEntry(newEntry) : 0;
+  $('done-fish').textContent = fish
+    ? `小猫得到 ${fish} 条小鱼干${newEntry.distractions === 0 ? `（含专注奖励 ${FISH_FOCUS_BONUS} 条）` : ''}`
+    : '';
   const s = stats();
   $('done-title').textContent = completed ? '完成' : '已结束';
   $('done-detail').textContent = `这次${timer.mode === 'breath' ? '呼吸练习' : ''} ${formatDuration(sec)}，已连续 ${s.streak} 天`;
@@ -819,7 +876,7 @@ const RING_LEN = 2 * Math.PI * 90;
 function show(id) {
   for (const el of document.querySelectorAll('.screen')) el.classList.toggle('active', el.id === id);
   window.scrollTo(0, 0);
-  if (id === 'stats' || id === 'settings') stopNoise(0.8);
+  if (id === 'stats' || id === 'settings' || id === 'wardrobe') stopNoise(0.8);
 }
 
 function formatClock(ms) {
@@ -887,6 +944,10 @@ function renderBreath(now = Date.now()) {
     return;
   }
   const st = breathState(elapsedMs(now), timer.pattern);
+  if (timer.phase === 'running' && st.step !== timer.lastStep) {
+    timer.lastStep = st.step;
+    breathCue(st);
+  }
   orb.style.transform = `scale(${st.scale.toFixed(4)})`;
   const b = (st.scale - ORB_MIN) / (ORB_MAX - ORB_MIN);
   orb.style.opacity = String(0.35 + 0.4 * b);
@@ -918,6 +979,60 @@ function renderHome() {
   if (s.streak) parts.push(`连续 ${s.streak} 天`);
   if (s.todayMin) parts.push(`今天 ${s.todayMin} 分钟`);
   $('summary').textContent = parts.length ? parts.join(' · ') : (log.length ? '今天还没开始' : '');
+  $('fish-count').textContent = fishBalance(log);
+  const mood = catMood(log);
+  const cat = $('home-cat');
+  cat.classList.toggle('lonely', mood === 'lonely');
+  cat.classList.toggle('lively', mood === 'lively');
+  if (mood === 'lonely') cat.querySelector('.bubble text').textContent = '…';
+}
+
+/* ---------- 小猫衣柜 ---------- */
+
+let buyArmed = null;
+
+function renderWardrobe() {
+  const balance = fishBalance(log);
+  $('fish-balance').textContent = balance;
+  const box = $('items');
+  box.textContent = '';
+  for (const item of ITEMS) {
+    const owned = wardrobe.owned.includes(item.id);
+    const worn = wardrobe.worn.includes(item.id);
+    const b = document.createElement('button');
+    b.className = 'item';
+    b.classList.toggle('worn', worn);
+    b.classList.toggle('locked', !owned && balance < item.price);
+    const name = document.createElement('span');
+    name.className = 'item-name';
+    name.textContent = item.name;
+    const state = document.createElement('span');
+    state.className = 'item-state';
+    if (worn) state.textContent = '已戴上';
+    else if (owned) state.textContent = '戴上';
+    else if (buyArmed === item.id) state.textContent = '再点一次兑换';
+    else state.textContent = `${item.price} 条`;
+    b.append(name, state);
+    b.addEventListener('click', () => {
+      if (owned) {
+        toggleWear(item.id);
+      } else if (balance < item.price) {
+        toast(`还差 ${item.price - balance} 条小鱼干`);
+        return;
+      } else if (buyArmed !== item.id) {
+        buyArmed = item.id;
+        setTimeout(() => { if (buyArmed === item.id) { buyArmed = null; renderWardrobe(); } }, 3000);
+      } else {
+        buyArmed = null;
+        buyItem(item.id, log);
+        catMischief($('wardrobe-cat'), 0);
+        setTimeout(() => $('wardrobe-cat').classList.remove(...MISCHIEF_CLASSES), 2000);
+        $('wardrobe-cat').querySelector('.bubble text').textContent = '♡';
+      }
+      renderWardrobe();
+    });
+    box.append(b);
+  }
 }
 
 function renderSettings() {
@@ -925,6 +1040,7 @@ function renderSettings() {
   $('prep').checked = settings.prep;
   $('wake').checked = settings.wake;
   $('theme').value = settings.theme;
+  $('cue').value = settings.cue;
   $('focus-detect').checked = settings.focus;
   $('volume').value = String(settings.volume);
   $('noise-volume').value = String(settings.noiseVolume);
@@ -1205,6 +1321,7 @@ $('open-stats').addEventListener('click', () => {
   renderStats();
   show('stats');
 });
+$('open-wardrobe').addEventListener('click', () => { buyArmed = null; renderWardrobe(); show('wardrobe'); });
 $('open-settings').addEventListener('click', () => { renderSettings(); show('settings'); });
 for (const b of document.querySelectorAll('[data-back]')) {
   b.addEventListener('click', () => { renderHome(); show('home'); });
@@ -1223,6 +1340,12 @@ $('cal-next').addEventListener('click', () => {
 $('interval').addEventListener('change', e => { settings.interval = Number(e.target.value); saveSettings(); });
 $('prep').addEventListener('change', e => { settings.prep = e.target.checked; saveSettings(); });
 $('wake').addEventListener('change', e => { settings.wake = e.target.checked; saveSettings(); });
+$('cue').addEventListener('change', e => {
+  settings.cue = e.target.value;
+  saveSettings();
+  if (settings.cue === 'tone') cueTone('in');
+  if (settings.cue === 'voice') cueVoice('吸气');
+});
 $('theme').addEventListener('change', e => { settings.theme = e.target.value; saveSettings(); applyTheme(); });
 $('focus-detect').addEventListener('change', e => {
   settings.focus = e.target.checked;
@@ -1286,6 +1409,7 @@ applyTheme();
 matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', applyTheme);
 
 mountCats();
+applyWardrobe();
 setupHomeCat();
 renderHome();
 

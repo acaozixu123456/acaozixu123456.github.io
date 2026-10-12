@@ -554,3 +554,76 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
 .done-effects b { font-weight: 300; font-size: 18px; color: var(--accent); font-variant-numeric: tabular-nums; }
 .done-effects span { font-size: 11px; color: var(--muted); }
 #session .hint:empty { display: none; }
+
+/* ---------- 小鱼干和衣柜 ---------- */
+
+.fish-pill {
+  display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 12px 0 9px;
+  border-radius: 999px; border: 1px solid var(--line); color: var(--accent);
+  font-size: 14px; font-variant-numeric: tabular-nums; margin-right: 4px; align-self: center;
+}
+.fish-pill .fish { width: 18px; height: 18px; fill: currentColor; }
+.fish-pill .fish circle { fill: var(--bg); }
+.fish-pill.static { margin-right: 0; }
+.wardrobe-cat { width: 190px; margin: 4px auto 0; }
+.items { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
+.item {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 14px 16px;
+  border-radius: 16px; background: var(--card); border: 1px solid var(--line); text-align: left;
+  transition: border-color .2s, opacity .2s;
+}
+.item-name { font-size: 15px; }
+.item-state { font-size: 12px; color: var(--accent); font-variant-numeric: tabular-nums; }
+.item.worn { border-color: var(--accent); }
+.item.locked { opacity: .45; }
+.item.locked .item-state { color: var(--muted); }
+.done-fish { margin: 0; font-size: 13px; color: var(--accent); min-height: 1.5em; }
+.done-fish:empty { display: none; }
+
+/* 配饰：默认藏起来，穿上才显示 */
+.cat .acc { display: none; }
+.wear-cushion .cat .acc-cushion,
+.wear-bow .cat .acc-bow,
+.wear-scarf .cat .acc-scarf,
+.wear-glasses .cat .acc-glasses,
+.wear-beanie .cat .acc-beanie { display: inline; }
+.wear-scarf .cat .collar, .wear-scarf .cat .bell { display: none; }
+.wear-cushion .cat .shadow { display: none; }
+
+.cat .cushion-base { fill: #7d6aa8; }
+.cat .cushion-top { fill: #9a87c4; }
+.cat .cushion-tuft { fill: #6a5894; }
+.cat .scarf { fill: none; stroke: #d9534f; stroke-width: 13; stroke-linecap: round; }
+.cat .scarf-tail { fill: #c94743; stroke: #c94743; stroke-width: 3; stroke-linejoin: round; }
+.cat .scarf-knit { stroke: #f1a29f; stroke-width: 1.6; stroke-linecap: round; opacity: .8; }
+.cat .acc-glasses circle { fill: rgba(255, 255, 255, .12); stroke: #3b2f28; stroke-width: 2.6; }
+.cat .acc-glasses path { fill: none; stroke: #3b2f28; stroke-width: 2.6; stroke-linecap: round; }
+.cat .beanie { fill: #5d8f86; }
+.cat .beanie-rib { stroke: #4b766e; stroke-width: 2; stroke-linecap: round; }
+.cat .beanie-band { fill: #4b766e; }
+.cat .beanie-pom { fill: #f3efe6; }
+.cat .bow { fill: #f27b93; stroke: #f27b93; stroke-width: 2; stroke-linejoin: round; }
+.cat .bow-knot { fill: #d95f78; }
+
+/* 毛色：换几个颜色变量就行 */
+.wear-coat-cream { --fur: #f6e6cf; --fur-dark: #e2c9a6; --fur-light: #fffaf2; }
+.wear-coat-grey { --fur: #aeb4bf; --fur-dark: #8a909c; --fur-light: #eef0f3; }
+.wear-coat-black { --fur: #3d3d47; --fur-dark: #26262c; --fur-light: #4a4a54; --cat-ink: #f0d58a; }
+.wear-coat-black .cat .pupil { fill: #e9c75e; }
+.wear-coat-black .cat .whisker { stroke: #d8d8de; }
+.wear-coat-black .cat .toe { stroke: #8a8a96; }
+
+/* 心情 */
+.cat .sparkles path { fill: var(--accent); opacity: 0; transform-box: fill-box; transform-origin: center; }
+.lively .cat .sparkles .s1 { animation: twinkle 3.2s ease-in-out infinite; }
+.lively .cat .sparkles .s2 { animation: twinkle 3.2s ease-in-out 1.1s infinite; }
+.lively .cat .sparkles .s3 { animation: twinkle 3.2s ease-in-out 2.2s infinite; }
+@keyframes twinkle { 0%, 100% { opacity: 0; scale: .4; } 50% { opacity: .9; scale: 1; } }
+
+.lonely .cat .hopper { transform-origin: 100px 195px; transform: scale(1.05, .9); transition: transform .6s; }
+.lonely .cat .ear-l { animation: none; transform: rotate(-16deg); }
+.lonely .cat .ear-r { animation: none; transform: rotate(16deg); }
+.lonely .cat .look { translate: 0 2.5px; }
+.lonely .cat .tail { animation-duration: 14s; }
+.lonely:not(.mischief) .cat .bubble { opacity: 1; transform: none; }
+.wear-coat-black .cat .hopper { filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, .4)); }

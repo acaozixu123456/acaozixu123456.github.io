@@ -6,6 +6,16 @@ const HEART = 'M0 3 C0 -1 6 -1 6 3 C6 -1 12 -1 12 3 C12 7 6 10 6 12 C6 10 0 7 0 
 const CAT_SVG = `
 <svg class="cat" viewBox="0 0 200 210" xmlns="http://www.w3.org/2000/svg">
   <ellipse class="shadow" cx="100" cy="197" rx="54" ry="6"/>
+  <g class="acc acc-cushion">
+    <ellipse class="cushion-base" cx="100" cy="196" rx="76" ry="14"/>
+    <ellipse class="cushion-top" cx="100" cy="191" rx="70" ry="10"/>
+    <circle class="cushion-tuft" cx="100" cy="191" r="2.4"/>
+  </g>
+  <g class="sparkles">
+    <path class="s1" d="M30 60 l3 -9 l3 9 l9 3 l-9 3 l-3 9 l-3 -9 l-9 -3 z"/>
+    <path class="s2" d="M170 96 l2 -6 l2 6 l6 2 l-6 2 l-2 6 l-2 -6 l-6 -2 z"/>
+    <path class="s3" d="M24 132 l2 -5 l2 5 l5 2 l-5 2 l-2 5 l-2 -5 l-5 -2 z"/>
+  </g>
   <g class="hopper">
     <g class="tail">
       <path d="M136 182 C 180 188, 196 144, 168 120"/>
@@ -39,6 +49,25 @@ const CAT_SVG = `
       <path class="whisker" d="M46 92 L24 88 M46 99 L25 102 M154 92 L176 88 M154 99 L175 102"/>
       <path class="collar" d="M66 117 Q100 134 134 117"/>
       <g class="bell"><circle cx="100" cy="129" r="6"/><path d="M95 129 h10 M100 131 v3"/></g>
+      <g class="acc acc-scarf">
+        <path class="scarf-tail" d="M114 122 l6 30 l12 -3 l-4 -30 z"/>
+        <path class="scarf" d="M62 114 Q100 138 138 114"/>
+        <path class="scarf-knit" d="M74 120 l2 6 M88 124 l1 6 M102 126 l0 6 M116 124 l-1 6 M128 119 l-2 6"/>
+      </g>
+      <g class="acc acc-glasses">
+        <circle cx="80" cy="83" r="14"/><circle cx="120" cy="83" r="14"/>
+        <path d="M94 82 Q100 78 106 82 M66 80 L50 76 M134 80 L150 76"/>
+      </g>
+      <g class="acc acc-beanie">
+        <path class="beanie" d="M64 50 C 64 14, 136 14, 136 50 Z"/>
+        <path class="beanie-rib" d="M80 26 v22 M92 21 v27 M108 21 v27 M120 26 v22"/>
+        <rect class="beanie-band" x="60" y="44" width="80" height="11" rx="5.5"/>
+        <circle class="beanie-pom" cx="100" cy="15" r="8"/>
+      </g>
+      <g class="acc acc-bow">
+        <path class="bow" d="M132 34 l-14 -10 l2 18 z M132 34 l14 -10 l-2 18 z"/>
+        <circle class="bow-knot" cx="132" cy="34" r="4"/>
+      </g>
     </g>
   </g>
   <g class="yarn">
