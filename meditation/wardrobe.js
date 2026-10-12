@@ -16,6 +16,8 @@ const ITEMS = [
 
 let wardrobe = { owned: [], worn: [], ...loadWardrobe() };
 // 毛色改成在捏脸里免费调，以前买毛色花的小鱼干退回来
+if (!Array.isArray(wardrobe.owned)) wardrobe.owned = [];
+if (!Array.isArray(wardrobe.worn)) wardrobe.worn = [];
 wardrobe.owned = wardrobe.owned.filter(id => ITEMS.some(i => i.id === id));
 wardrobe.worn = wardrobe.worn.filter(id => ITEMS.some(i => i.id === id));
 
@@ -80,7 +82,7 @@ function buyItem(id, entries) {
 function catMood(entries, now = new Date()) {
   if (!entries.length) return '';
   const last = new Date(entries[entries.length - 1].start);
-  const days = Math.floor((new Date(now.getFullYear(), now.getMonth(), now.getDate()) -
+  const days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) -
     new Date(last.getFullYear(), last.getMonth(), last.getDate())) / 86400000);
   if (days >= 2) return 'lonely';
   if (computeStreak(entries, now) >= 3) return 'lively';
