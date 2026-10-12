@@ -78,6 +78,7 @@
           <button data-sound="rain">雨声</button>
           <button data-sound="ocean">海浪</button>
           <button data-sound="forest">森林</button>
+          <button data-sound="place">星球</button>
         </div>
       </div>
     </div>
@@ -167,8 +168,15 @@
       </button>
       <div class="page-title">星图</div>
       <span class="sm-hours" id="sm-hours"></span>
+      <div class="segmented sm-tabs" id="sm-tabs">
+        <button data-tab="route" class="on">航线</button>
+        <button data-tab="sights">天象</button>
+        <button data-tab="cons">星座</button>
+      </div>
     </header>
     <div class="sm-route" id="sm-route"></div>
+    <div class="sm-panel" id="sm-sights" hidden></div>
+    <div class="sm-panel" id="sm-cons" hidden></div>
     <div class="sm-sheet off" id="sm-sheet"></div>
   </main>
 
@@ -282,8 +290,19 @@
     <div id="done-effects" class="done-effects"></div>
     <p id="done-fish" class="done-fish"></p>
     <p id="done-travel" class="done-travel"></p>
+    <p id="done-sky" class="done-sky"></p>
+    <button id="make-card" class="ghost wide card-btn" hidden>生成旅行明信片</button>
     <button id="back" class="ghost wide">回到首页</button>
   </main>
+
+  <div class="postcard" id="postcard" hidden>
+    <img id="postcard-img" alt="旅行明信片">
+    <p class="hint center">长按图片可以存到相册</p>
+    <div class="controls">
+      <button id="postcard-share" class="ghost" hidden>分享 / 保存</button>
+      <button id="postcard-close" class="ghost">关闭</button>
+    </div>
+  </div>
 
   <div id="toast" class="toast" hidden></div>
 
@@ -292,6 +311,9 @@
   <script src="wardrobe.js"></script>
   <script src="space.js"></script>
   <script src="travel.js"></script>
+  <script src="sky.js"></script>
+  <script src="ambience.js"></script>
+  <script src="postcard.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

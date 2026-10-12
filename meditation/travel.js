@@ -196,6 +196,12 @@ function openPlaceSheet(p, st, isOpen, focusOn) {
   const desc = document.createElement('p');
   desc.textContent = p.desc;
   sheet.append(close, title, desc);
+  if (p.id === 'moon') {
+    const real = document.createElement('p');
+    real.className = 'sm-real';
+    real.textContent = realSkyText();
+    sheet.appendChild(real);
+  }
 
   if (v) {
     const stats = document.createElement('div');

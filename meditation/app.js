@@ -35,6 +35,7 @@ function saveSettings() { save(SETTINGS_KEY, settings); }
 function saveLog() {
   log.sort((a, b) => a.start.localeCompare(b.start));
   save(LOG_KEY, log);
+  applyConstellation(log);
 }
 
 /* ---------- 日期与统计 ---------- */
@@ -280,6 +281,7 @@ function lfo(param, rate, center, depth) {
 }
 
 const NOISE_RECIPES = {
+  place(out, parts) { placeAmbience(out, parts); },
   rain(out, parts) {
     const drops = loopSource('rain');
     const hp = filter('highpass', 400);
@@ -358,7 +360,7 @@ function startNoise(kind, fadeSec = 3) {
   clearTimeout(previewTimer);
   if (!kind || kind === 'none' || !NOISE_RECIPES[kind]) { stopNoise(1); return; }
   ensureAudio();
-  if (noise && noise.kind === kind) {
+  if (noise && noise.kind === kind && noise.at === travel.here) {
     fadeTo(noise.gain, settings.noiseVolume, fadeSec);
     return;
   }
@@ -368,7 +370,7 @@ function startNoise(kind, fadeSec = 3) {
   gain.connect(bus);
   const parts = [];
   NOISE_RECIPES[kind](gain, parts);
-  noise = { kind, gain, parts };
+  noise = { kind, gain, parts, at: travel.here };
   fadeTo(gain, settings.noiseVolume, fadeSec);
 }
 
@@ -709,6 +711,9 @@ function startSession() {
   timer.mode = settings.mode;
   timer.pattern = PATTERNS[settings.pattern] || PATTERNS['478'];
   timer.sound = settings.sound;
+  timer.sight = rollSight(travel.here, timer.plannedMs, log);
+  timer.sightSeen = false;
+  Space.event(0);
   stopArmedUntil = 0;
   timer.lastStep = -1;
   requestMotion();
@@ -763,6 +768,11 @@ function tick() {
   if (timer.phase === 'running' && elapsedMs(now) >= timer.plannedMs) {
     finish(true, now);
     return;
+  }
+  if (timer.phase === 'running' && timer.sight) {
+    const sg = timer.sight, p = (elapsedMs(now) - sg.startMs) / sg.durMs;
+    Space.event(p >= 0 && p <= 1 ? sg.type : 0, p, sg.seed);
+    if (p >= 0.5) timer.sightSeen = true;
   }
   if (timer.phase === 'running' && !timer.rising && timer.plannedMs >= 60000 && timer.plannedMs - elapsedMs(now) <= STAND_MS + 1200) standUp();
   renderSession(now);
@@ -827,6 +837,7 @@ function finish(completed, now = Date.now()) {
   timer.rising = false;
   resetPose();
   Space.breath(null);
+  Space.event(0);
   stopNoise(completed ? 8 : 2);
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   clearTimeout(focus.stirTimer);
@@ -849,6 +860,7 @@ function finish(completed, now = Date.now()) {
     if (timer.mode === 'breath') entry.mode = 'breath';
     if (focus.on) entry.distractions = focus.count;
     entry.place = travel.here;
+    if (timer.sight && timer.sightSeen) entry.sight = timer.sight.id;
     log.push(entry);
     saveLog();
   }
@@ -868,6 +880,9 @@ function finish(completed, now = Date.now()) {
   $('done-title').textContent = completed ? '完成' : '已结束';
   $('done-detail').textContent = `这次${timer.mode === 'breath' ? '呼吸练习' : ''} ${formatDuration(sec)}，已连续 ${s.streak} 天`;
   $('done-travel').textContent = savedEntry ? doneTravelText(openBefore, sec) : '';
+  $('done-sky').textContent = savedEntry ? doneSkyText(newEntry) : '';
+  lastEntry = newEntry;
+  $('make-card').hidden = !(newEntry && Space.on);
   $('done-focus').textContent = focusSummary();
   $('done-focus').className = `focus center${focus.on && focus.count === 0 ? ' clean' : ''}`;
   const messy = focus.on && focus.count > 0;
@@ -939,6 +954,21 @@ function doneTravelText(openBefore, sec) {
   return next ? `${here}，${next}` : here;
 }
 
+let lastEntry = null;
+
+// 结束页：这次遇到的天象、星座点亮了几颗
+function doneSkyText(entry) {
+  const parts = [];
+  const sg = SIGHT[entry.sight];
+  if (sg) {
+    const first = log.filter(e => e.sight === sg.id).length === 1;
+    parts.push(`潜修时，天上出现了${sg.name} ${sg.icon}${first ? '，第一次遇见，已收进图鉴' : ''}`);
+  }
+  const ct = conText(log.length);
+  if (ct) parts.push(ct);
+  return parts.join('\n');
+}
+
 function travelTo(id) {
   travel.here = id;
   saveTravel();
@@ -947,8 +977,19 @@ function travelTo(id) {
   Space.go(id);
 }
 
+function smTab(tab) {
+  for (const b of $('sm-tabs').children) b.classList.toggle('on', b.dataset.tab === tab);
+  $('sm-route').hidden = tab !== 'route';
+  $('sm-sights').hidden = tab !== 'sights';
+  $('sm-cons').hidden = tab !== 'cons';
+  if (tab === 'sights') renderSights(log);
+  if (tab === 'cons') renderCons(log);
+  if (tab !== 'route') { closePlaceSheet(); window.scrollTo(0, 0); }
+}
+
 function openStarmap() {
   const y = renderStarmap(log, settings.focus);
+  smTab('route');
   show('starmap');
   // 把小猫所在的地方滚到屏幕中间
   window.scrollTo(0, Math.max(0, $('sm-route').offsetTop + y - innerHeight * 0.45));
@@ -1384,6 +1425,7 @@ async function importLog(file) {
       if (e.mode === 'breath') entry.mode = 'breath';
       if (Number.isInteger(e.distractions) && e.distractions >= 0) entry.distractions = e.distractions;
       if (PLACE[e.place]) entry.place = e.place;
+      if (SIGHT[e.sight]) entry.sight = e.sight;
       log.push(entry);
       known.add(e.start);
       added++;
@@ -1489,6 +1531,10 @@ $('pause').addEventListener('click', togglePause);
 $('stop').addEventListener('click', stopEarly);
 $('stage').addEventListener('click', skipPrep);
 $('back').addEventListener('click', () => { show('home'); renderHome(); });
+$('make-card').addEventListener('click', () => { if (lastEntry) openPostcard(lastEntry, $('done-cat').querySelector('.cat')); });
+$('postcard-close').addEventListener('click', closePostcard);
+$('postcard-share').addEventListener('click', sharePostcard);
+pick('sm-tabs', 'tab', smTab);
 $('export').addEventListener('click', exportLog);
 $('import').addEventListener('change', e => {
   const f = e.target.files[0];
@@ -1524,6 +1570,11 @@ function applyTheme() {
 }
 applyBackground();
 matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', applyTheme);
+
+// 月面上的地球跟现实同步：地相、昼夜、你所在的位置
+Space.sky(realSky());
+setInterval(() => Space.sky(realSky()), 30000);
+applyConstellation(log);
 
 mountCats();
 applyWardrobe();
