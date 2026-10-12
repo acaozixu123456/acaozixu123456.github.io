@@ -390,13 +390,18 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
   --collar-hi: #a46a43;
   --collar-lo: #5a341e;
   --collar-text: #f3e3c8;
+  /* 场景光，cat.js 的 catLight() 按地点改写 */
+  --key: #ffffff; --ka: .14; --shade: #2a2034; --sa: .25; --rim: #cfe0ff; --ra: .3; --glint: #ffffff; --ao: #000;
 }
 .cat-host { display: grid; place-items: center; }
 .cat { width: 100%; height: auto; overflow: visible; }
 .cat .light { fill: var(--fur-light); }
 .cat .inner { fill: var(--cat-pink); opacity: .85; }
 .cat .tuft { stroke: #fff; stroke-width: 1.3; stroke-linecap: round; opacity: .7; }
-.cat .stripe-f { fill: var(--stripe); opacity: .92; }
+.cat .stripe-f { fill: var(--stripe); opacity: .88; }
+.cat .fluff { fill: var(--fur); }
+.cat .chest-fur { fill: none; stroke: var(--white-lo); stroke-width: 1.3; stroke-linecap: round; opacity: .75; }
+.cat .tail .tail-lit { stroke-linecap: round; }
 .cat .rim { fill: none; stroke-width: 3.5; }
 .cat .tail path { fill: none; stroke-width: 15; }
 .cat .tail .tail-base { stroke: var(--fur); stroke-linecap: round; }
@@ -406,14 +411,14 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
 .cat .blush { opacity: .75; transition: opacity .3s; }
 .cat .eyes path { fill: none; stroke: var(--cat-ink); stroke-width: 3; stroke-linecap: round; }
 .cat .pupil { fill: #17110e; }
-.cat .shine { fill: #fff; }
+.cat .shine { fill: var(--glint, #fff); }
 .cat .eye-ring { fill: none; stroke: var(--cat-ink); stroke-width: 2; }
 .cat .nose { fill: var(--nose); stroke: var(--nose-ink); stroke-width: 1.6; stroke-linejoin: round; }
 .cat .nose-shine { fill: #fff; opacity: .7; }
 .cat .mouth { fill: none; stroke: var(--mouth); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .cat .dots { stroke: var(--dots); stroke-width: 1.4; stroke-linecap: round; opacity: .6; }
 .cat .whisker { fill: none; stroke: var(--whisker); stroke-width: 1.1; stroke-linecap: round; opacity: .6; }
-.cat .shadow { fill: #000; opacity: .18; }
+.cat .shadow { opacity: 1; }
 .cat .ball { transform-origin: 40px 182px; }
 .cat .yarn .ball circle { fill: #b9a3d8; }
 .cat .yarn .ball path, .cat .yarn .thread { fill: none; stroke: #8f78b4; stroke-width: 1.6; stroke-linecap: round; }

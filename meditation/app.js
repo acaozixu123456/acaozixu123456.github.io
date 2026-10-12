@@ -1000,6 +1000,7 @@ function openStarmap() {
 function applyBackground() {
   const space = settings.bg !== 'aurora' && Space.start(travel.here);
   if (!space) Space.stop();
+  catLight(space ? travel.here : null);
   applyTheme();
 }
 
