@@ -8,6 +8,12 @@
   --accent: #e6c992;
   --accent-ink: #1a1813;
   --danger: #e38b7d;
+  --stir: #e59a83;
+  --orb: #e6c992;
+  --a1: #1d3d4a;
+  --a2: #2f2650;
+  --a3: #3d3022;
+  --a4: #173554;
   --serif: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", serif;
   color-scheme: dark;
 }
@@ -22,25 +28,52 @@
     --muted: #8a857c;
     --accent: #a8823f;
     --accent-ink: #ffffff;
+    --stir: #cf7a63;
+    --orb: #f2c27e;
+    --a1: #c9dccb;
+    --a2: #ddd2ec;
+    --a3: #f3d5c3;
+    --a4: #c8dbe9;
     color-scheme: light;
   }
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+html { background: var(--bg); }
 html, body {
   margin: 0;
   min-height: 100%;
-  background: var(--bg);
   color: var(--text);
   font: 16px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
   -webkit-user-select: none;
   user-select: none;
   overscroll-behavior: none;
 }
-body {
-  background: radial-gradient(120% 55% at 50% -5%, var(--glow) 0%, var(--bg) 70%) fixed, var(--bg);
+
+/* ---------- 流动背景：几团柔光缓慢漂移 ---------- */
+
+.aurora {
+  position: fixed; inset: 0; z-index: -1; overflow: hidden;
+  background: var(--bg);
+  transition: filter 18s ease;
 }
+.aurora i {
+  position: absolute; width: 90vmax; height: 90vmax; border-radius: 50%;
+  opacity: .75; will-change: transform;
+}
+.aurora i:nth-child(1) { background: radial-gradient(closest-side, var(--a1), transparent); left: -35vmax; top: -30vmax; animation: drift1 38s ease-in-out infinite alternate; }
+.aurora i:nth-child(2) { background: radial-gradient(closest-side, var(--a2), transparent); right: -40vmax; top: -10vmax; animation: drift2 46s ease-in-out infinite alternate; }
+.aurora i:nth-child(3) { background: radial-gradient(closest-side, var(--a3), transparent); left: -20vmax; bottom: -45vmax; animation: drift3 52s ease-in-out infinite alternate; }
+.aurora i:nth-child(4) { background: radial-gradient(closest-side, var(--a4), transparent); right: -35vmax; bottom: -30vmax; animation: drift1 60s ease-in-out infinite alternate-reverse; }
+@keyframes drift1 { from { transform: translate(0, 0) scale(1); } to { transform: translate(18vmax, 22vmax) scale(1.15); } }
+@keyframes drift2 { from { transform: translate(0, 0) scale(1.1); } to { transform: translate(-22vmax, 16vmax) scale(.9); } }
+@keyframes drift3 { from { transform: translate(0, 0) scale(.95); } to { transform: translate(20vmax, -18vmax) scale(1.12); } }
+/* 计时中光晕流动得更慢、更深一点 */
+.in-session .aurora i { animation-duration: 70s; }
+/* 被打扰：画面瞬间褪色，再慢慢恢复 */
+.stirred .aurora { filter: saturate(.1) brightness(.92); transition: filter .5s ease; }
+@media (prefers-reduced-motion: reduce) { .aurora i, .ripples i { animation: none !important; } }
 
 button, select, input { font: inherit; color: inherit; }
 button { cursor: pointer; border: none; background: none; touch-action: manipulation; padding: 0; }
@@ -62,6 +95,10 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
 .center { text-align: center; }
 .hint { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
 .hint.pad { padding: 0 4px; }
+.row small { display: block; font-size: 12px; color: var(--muted); }
+.focus { margin: 0; font-size: 13px; color: var(--muted); letter-spacing: .08em; min-height: 1.5em; transition: color .4s; }
+.focus.alert { color: var(--stir); }
+.focus.clean::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 8px; vertical-align: middle; }
 
 /* ---------- 顶栏 ---------- */
 
@@ -164,7 +201,7 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
 
 /* ---------- 卡片与列表 ---------- */
 
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 16px; margin-bottom: 14px; }
+.card { -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 16px; margin-bottom: 14px; }
 
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; border-top: 1px solid var(--line); }
 .row:first-child { border-top: none; }
@@ -217,6 +254,7 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
 .log li:first-child { border-top: none; }
 .log .when { color: var(--muted); }
 .log .tag { font-size: 11px; color: var(--accent); border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; margin-left: 8px; }
+.log .tag.muted-tag { color: var(--stir); }
 .log .del { color: var(--muted); padding: 4px 0 4px 12px; font-size: 18px; }
 .log .del.armed { color: var(--danger); font-size: 13px; }
 .backup { display: flex; justify-content: center; gap: 24px; padding: 4px 0 12px; }
@@ -229,29 +267,58 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 28px;
+  gap: 22px;
 }
 .phase { color: var(--muted); letter-spacing: .4em; text-indent: .4em; font-size: 14px; min-height: 1.5em; font-variant-numeric: tabular-nums; }
-.stage { position: relative; width: min(80vw, 340px); aspect-ratio: 1; }
+.stage { position: relative; width: min(76vw, 320px); aspect-ratio: 1; }
 .ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
 .ring circle { fill: none; stroke-width: 2.5; }
 .ring-bg { stroke: var(--line); }
 .ring-fg { stroke: var(--accent); stroke-dasharray: 565.49; stroke-linecap: round; transition: stroke-dashoffset .3s linear; }
 
+/* 静坐：中心一团静光，水波缓缓向外 */
+.glow {
+  position: absolute; inset: 18%; border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--orb) 55%, transparent), transparent);
+  animation: still 8s ease-in-out infinite;
+  transition: filter .5s;
+}
+@keyframes still { 0%, 100% { transform: scale(.92); opacity: .7; } 50% { transform: scale(1.05); opacity: 1; } }
+.ripples { position: absolute; inset: 0; }
+.ripples i {
+  position: absolute; inset: 6%; border-radius: 50%;
+  border: 1px solid var(--accent); opacity: 0;
+  animation: ripple 12s ease-out infinite;
+}
+.ripples i:nth-child(2) { animation-delay: 4s; }
+.ripples i:nth-child(3) { animation-delay: 8s; }
+@keyframes ripple { 0% { transform: scale(.25); opacity: 0; } 15% { opacity: .6; } 100% { transform: scale(1); opacity: 0; } }
+.breath .glow, .breath .ripples { display: none; }
+/* 被打扰时水面被搅动 */
+.stir .ripples i { border-color: var(--stir); border-width: 1.5px; animation: ripple 1.6s ease-out infinite; }
+.stir .ripples i:nth-child(2) { animation-delay: .5s; }
+.stir .ripples i:nth-child(3) { animation-delay: 1s; }
+.stir .glow, .stir .orb { filter: grayscale(1); }
+.paused .ripples i, .paused .glow { animation-play-state: paused; }
+
+.marks { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.marks circle { fill: var(--stir); }
+
 .orb-guide, .orb { position: absolute; inset: 0; border-radius: 50%; display: none; }
 .orb-guide { border: 1px dashed var(--line); }
 .orb {
-  background: radial-gradient(circle closest-side, var(--accent) 0%, color-mix(in srgb, var(--accent) 40%, transparent) 55%, transparent 100%);
+  background: radial-gradient(circle closest-side, var(--orb) 0%, color-mix(in srgb, var(--orb) 45%, transparent) 55%, transparent 100%);
   opacity: .55;
   transform: scale(.45);
   will-change: transform;
+  transition: filter .5s;
 }
 .breath .ring { display: none; }
 .breath .orb, .breath .orb-guide { display: block; }
 
-.center-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.time { font-size: clamp(48px, 16vw, 68px); font-weight: 200; font-variant-numeric: tabular-nums; line-height: 1.1; }
-.breath .time { font-family: var(--serif); font-weight: 400; font-size: clamp(32px, 10vw, 42px); letter-spacing: .3em; text-indent: .3em; }
+.readout { display: flex; flex-direction: column; align-items: center; margin-top: -8px; }
+.time { font-size: clamp(40px, 13vw, 56px); font-weight: 200; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.breath .time { font-family: var(--serif); font-weight: 400; font-size: clamp(28px, 9vw, 36px); letter-spacing: .3em; text-indent: .3em; }
 .sub { font-size: 14px; color: var(--muted); min-height: 1.5em; font-variant-numeric: tabular-nums; }
 #session .hint { min-height: 1.5em; margin: 0; letter-spacing: .05em; }
 .breath .phase { letter-spacing: .15em; text-indent: .15em; }
@@ -264,13 +331,6 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
 
 /* ---------- 完成页 ---------- */
 
-.done-mark {
-  width: 96px; height: 96px; border-radius: 50%;
-  border: 1.5px solid var(--accent);
-  box-shadow: 0 0 60px -10px var(--accent);
-  animation: settle 1.6s ease;
-}
-@keyframes settle { from { transform: scale(.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
 .toast {
   position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 24px); transform: translateX(-50%);
@@ -279,3 +339,105 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
 }
 .toast[hidden] { display: none; }
 #settings .card { padding: 4px 16px; }
+
+/* ---------- 小猫 ---------- */
+
+:root {
+  --fur: #f0b47a;
+  --fur-dark: #d98f4f;
+  --fur-light: #fff1df;
+  --cat-ink: #4e3a2c;
+  --cat-pink: #f29c9c;
+}
+.cat-host { display: grid; place-items: center; }
+.cat { width: 100%; height: auto; overflow: visible; }
+.cat .fur { fill: var(--fur); }
+.cat .light, .cat .belly { fill: var(--fur-light); }
+.cat .inner { fill: var(--cat-pink); opacity: .55; }
+.cat .stripe { stroke: var(--fur-dark); stroke-width: 4; stroke-linecap: round; fill: none; }
+.cat .tail path { fill: none; stroke: var(--fur); stroke-width: 14; stroke-linecap: round; }
+.cat .toe { stroke: var(--fur-dark); stroke-width: 1.5; stroke-linecap: round; opacity: .5; }
+.cat .blush { fill: var(--cat-pink); opacity: .45; }
+.cat .eyes path { fill: none; stroke: var(--cat-ink); stroke-width: 3.2; stroke-linecap: round; }
+.cat .pupil { fill: var(--cat-ink); }
+.cat .shine { fill: #fff; }
+.cat .nose { fill: var(--cat-pink); stroke: var(--cat-pink); stroke-width: 2; stroke-linejoin: round; }
+.cat .mouth { fill: none; stroke: var(--cat-ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.cat .whisker { stroke: var(--cat-ink); stroke-width: 1.2; stroke-linecap: round; opacity: .35; }
+.cat .shadow { fill: #000; opacity: .1; }
+.cat .ball { transform-origin: 40px 182px; }
+.cat .yarn .ball circle { fill: #b9a3d8; }
+.cat .yarn .ball path, .cat .yarn .thread { fill: none; stroke: #8f78b4; stroke-width: 1.6; stroke-linecap: round; }
+.cat .bubble circle { fill: var(--fur-light); stroke: var(--fur-dark); stroke-width: 1.5; }
+.cat .bubble text { font: 600 20px -apple-system, sans-serif; fill: var(--cat-ink); }
+
+/* 平静：呼吸、摇尾巴、偶尔抖耳朵 */
+.cat .body-g { transform-origin: 100px 192px; animation: cat-breathe 5s ease-in-out infinite; }
+.cat .head { transform-origin: 100px 116px; animation: cat-bob 5s ease-in-out infinite; transition: transform .5s ease; }
+.cat .tail { transform-origin: 140px 178px; animation: cat-tail 7s ease-in-out infinite; }
+.cat .ear-r { transform-origin: 128px 58px; animation: cat-ear 11s ease-in-out infinite; }
+.cat .ear-l { transform-origin: 72px 58px; animation: cat-ear-l 17s ease-in-out infinite; }
+@keyframes cat-breathe { 50% { transform: scale(1.03, 1.045); } }
+@keyframes cat-bob { 50% { transform: translateY(-2px); } }
+@keyframes cat-tail { 0%, 100% { transform: rotate(-7deg); } 50% { transform: rotate(9deg); } }
+@keyframes cat-ear { 0%, 90%, 100% { transform: rotate(0); } 92% { transform: rotate(12deg); } 94% { transform: rotate(-4deg); } 96% { transform: rotate(6deg); } }
+@keyframes cat-ear-l { 0%, 93%, 100% { transform: rotate(0); } 95% { transform: rotate(-10deg); } 97% { transform: rotate(3deg); } }
+
+/* 眼睛：默认闭眼；醒着或捣蛋时睁开 */
+.cat .eyes, .cat .eyes-open { transition: opacity .25s ease, transform .25s ease; transform-origin: 100px 79px; }
+.cat .eyes-open { opacity: 0; transform: scaleY(.1); }
+.cat .eyes-happy { opacity: 0; }
+.awake .cat .eyes-open, .mischief .cat .eyes-open { opacity: 1; transform: none; }
+.awake .cat .eyes-closed, .mischief .cat .eyes-closed { opacity: 0; }
+.happy .cat .eyes-closed { opacity: 0; }
+.happy .cat .eyes-happy { opacity: 1; }
+.messy .cat .yarn { opacity: 1; }
+.messy .cat .ball { transform: translateX(-6px) rotate(-40deg); }
+
+.cat .yarn, .cat .bubble { opacity: 0; }
+.cat .bubble { transform-origin: 164px 50px; transform: scale(.3); transition: opacity .3s, transform .4s cubic-bezier(.3, 1.6, .5, 1); }
+.mischief .cat .bubble { opacity: 1; transform: none; }
+
+/* 捣蛋一：歪头看你 */
+.m-peek .cat .head { animation: cat-tilt 3.6s ease-in-out; }
+@keyframes cat-tilt { 0% { transform: none; } 15%, 45% { transform: rotate(-12deg) translateY(-3px); } 60%, 85% { transform: rotate(10deg) translateY(-3px); } 100% { transform: none; } }
+
+/* 捣蛋二：毛线球滚过来，伸爪子拍 */
+.m-yarn .cat .yarn { opacity: 1; transition: opacity .3s; }
+.m-yarn .cat .ball { transform-origin: 40px 182px; animation: yarn-roll 3.8s ease-in-out forwards; }
+.m-yarn .cat .paw-l { transform-origin: 84px 186px; animation: cat-swipe .55s ease-in-out .9s 5; }
+.m-yarn .cat .head { animation: cat-look 3.8s ease-in-out; }
+.m-yarn .cat .tail { animation: cat-tail .7s ease-in-out infinite; }
+@keyframes yarn-roll {
+  0% { transform: translateX(-90px) rotate(-360deg); }
+  25% { transform: translateX(0) rotate(0); }
+  40% { transform: translateX(-10px) rotate(-60deg); }
+  55% { transform: translateX(2px) rotate(10deg); }
+  70% { transform: translate(-16px, -8px) rotate(-90deg); }
+  85% { transform: translateX(-4px) rotate(-30deg); }
+  100% { transform: translateX(-100px) rotate(-400deg); }
+}
+@keyframes cat-swipe { 0%, 100% { transform: none; } 45% { transform: translate(-16px, -22px) rotate(-30deg); } }
+@keyframes cat-look { 0%, 100% { transform: none; } 20%, 80% { transform: rotate(-8deg) translate(-4px, 4px); } }
+
+/* 捣蛋三：蹦起来，尾巴炸毛 */
+.m-hop .cat .hopper { animation: cat-hop .6s cubic-bezier(.3, .7, .4, 1) 4; transform-origin: 100px 192px; }
+.m-hop .cat .shadow { animation: cat-shadow .6s ease 4; transform-origin: 100px 196px; }
+.m-hop .cat .tail path { stroke-width: 20; transition: stroke-width .2s; }
+.m-hop .cat .tail { animation: cat-tail .4s ease-in-out infinite; }
+@keyframes cat-hop { 0%, 100% { transform: scale(1.04, .94); } 45% { transform: translateY(-26px) scale(.97, 1.04); } }
+@keyframes cat-shadow { 45% { transform: scale(.7); opacity: .05; } }
+
+/* 暂停时小猫也停下 */
+.paused .cat * { animation-play-state: paused !important; }
+
+/* 呼吸模式：身体跟着光圈一起起伏（--b 由脚本设置，0 呼尽，1 吸满） */
+.breath .stage-cat .cat .body-g { animation: none; transform: scale(calc(1 + var(--b, 0) * .06), calc(1 + var(--b, 0) * .09)); }
+.breath .stage-cat .cat .head { animation: none; transform: translateY(calc(var(--b, 0) * -7px)); }
+.breath.mischief .stage-cat .cat .head { animation: cat-tilt 3.6s ease-in-out; }
+
+/* 摆放位置 */
+.home-cat { width: 120px; align-self: center; margin-bottom: -8px; }
+.stage-cat { position: absolute; left: 20%; right: 20%; bottom: 17%; }
+.done-cat { width: 150px; }
+@media (max-height: 700px) { .home-cat { width: 88px; } }
