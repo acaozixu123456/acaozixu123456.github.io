@@ -5,6 +5,8 @@
 const GLSL_HEAD = `
 precision highp float;
 uniform vec2 uRes; uniform float uT; uniform float uB; uniform float uR;
+uniform vec2 uShift; uniform float uZoom; uniform vec4 uCat; uniform float uLink;
+uniform vec4 uEv; uniform vec4 uSun; uniform vec4 uMk;
 #define PI 3.14159265
 float sq(float x){return x*x;}
 mat2 rot(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);}
@@ -38,7 +40,17 @@ vec3 starL(vec2 p,float sc,float dens,float seed){
   vec3 col=mix(vec3(.62,.74,1.),vec3(1.,.8,.62),h12(id+seed+3.));
   return col*c*b*tw;
 }
-// 偶尔划过的流星：两条时间线各自随机出现，尾巴由亮渐暗
+// 一道流星：从 s0 沿 dir 飞出，k 是这道流星自己的进度 0→1
+vec3 streak(vec2 p,vec2 s0,vec2 dir,float k,float travel){
+  vec2 hd=s0+dir*k*travel;
+  vec2 v=p-hd;
+  float al=dot(v,-dir), pe=dot(v,vec2(-dir.y,dir.x));
+  float len=.015+.11*sin(PI*min(k*1.4,1.));
+  float w=1.3/uRes.y;
+  float tail=step(0.,al)*exp(-al/len*3.)*exp(-pe*pe/(w*w));
+  return vec3(.75,.88,1.)*(tail*1.6+exp(-dot(v,v)/(w*w*3.))*2.)*sin(PI*k);
+}
+// 偶尔划过的流星：两条时间线各自随机出现
 vec3 meteors(vec2 p){
   vec3 c=vec3(0.);
   if(uR<0.)return c;
@@ -48,30 +60,68 @@ vec3 meteors(vec2 p){
     if(h12(vec2(id,fi*7.+1.))>.55)continue;
     float dur=.6+.5*h12(vec2(id,fi+3.));
     if(ph>dur)continue;
-    float k=ph/dur;
     float a=-.35-h12(vec2(id,fi+8.))*.7; float sg=h12(vec2(id,fi+9.))>.5?1.:-1.;
-    vec2 dir=vec2(cos(a)*sg,sin(a));
     vec2 s0=vec2(h12(vec2(id,fi+5.))*.9-.45,.12+h12(vec2(id,fi+6.))*.3);
-    vec2 hd=s0+dir*k*.3;
-    vec2 v=p-hd;
-    float al=dot(v,-dir), pe=dot(v,vec2(-dir.y,dir.x));
-    float len=.015+.11*sin(PI*min(k*1.4,1.));
-    float w=1.3/uRes.y;
-    float tail=step(0.,al)*exp(-al/len*3.)*exp(-pe*pe/(w*w));
-    float fade=sin(PI*k);
-    c+=vec3(.75,.88,1.)*(tail*1.6+exp(-dot(v,v)/(w*w*3.))*2.)*fade;
+    c+=streak(p,s0,vec2(cos(a)*sg,sin(a)),ph/dur,.3);
   }
   return c;
 }
 // 整片星空绕着画面上方很远的天极缓慢转动
+// 跟呼吸联动：吸气时星光向小猫聚拢、变亮，呼气时慢慢散开
 vec3 stars(vec2 p){
-  vec2 q=rot(uT*.0015)*(p-vec2(.3,1.4))+vec2(.3,1.4);
-  return starL(q,190.,.1,1.)*.3+starL(q,75.,.1,2.)*.55+starL(q,28.,.12,3.)*.9+meteors(p);
+  vec2 cc=(uCat.xy+vec2(0.,uCat.z*.9)-uShift)/uZoom;
+  float br=uLink*(uB-.5);
+  vec2 pb=cc+(p-cc)*(1.+br*.07);
+  vec2 q=rot(uT*.0015)*(pb-vec2(.3,1.4))+vec2(.3,1.4);
+  vec3 s=starL(q,190.,.1,1.)*.3+starL(q,75.,.1,2.)*.55+starL(q,28.,.12,3.)*.9;
+  return s*(1.+br*.7)+meteors(p);
 }
 vec3 spikeStar(vec2 d,float s){float l=length(d);
   float c=exp(-l*l*90000./(s*s))*4.+.0016*s/(l+.0015);
   c+=(exp(-abs(d.x)*1400./s)*exp(-abs(d.y)*22./s)+exp(-abs(d.y)*1400./s)*exp(-abs(d.x)*22./s))*.9;
   return vec3(c);}
+// 稀有天象：1 彗星，2 流星雨，3 超新星（4 日食画在各自的场景里）。uEv.y 进度，uEv.z 随机种子
+// 用屏幕坐标画，保证在手机画面里的位置和大小合适
+vec3 sightFx(vec2 uv){
+  float ty=uEv.x, pr=uEv.y, sd=uEv.z;
+  vec3 c=vec3(0.);
+  float fade=smoothstep(0.,.12,pr)*smoothstep(1.,.85,pr);
+  if(ty<1.5){
+    vec2 hd=mix(vec2(-.2+.08*sd,.37),vec2(.06+.1*sd,.24),pr);
+    vec2 v=uv-hd;
+    vec2 T=normalize(vec2(-.55,.85)), N=vec2(-T.y,T.x);
+    float al=dot(v,T), pe=dot(v,N);
+    float px=1./uRes.y;
+    float wd=.004+max(al,0.)*.1;
+    float dust=step(0.,al)*exp(-al/.16)*exp(-sq((pe+al*al*.9)/wd));
+    float wi=.0015+max(al,0.)*.012;
+    float ion=step(0.,al)*exp(-al/.32)*exp(-sq(pe/wi))*(.7+.5*n2(vec2(al*40.-uR*.6,pe*300.)));
+    float coma=exp(-dot(v,v)/(.009*.009))*1.1+exp(-dot(v,v)/(px*px*2.))*3.;
+    c=vec3(1.,.88,.68)*dust*.9+vec3(.45,.7,1.)*ion*.8+vec3(.75,1.,.88)*coma;
+    c*=fade;
+  } else if(ty<2.5){
+    vec2 rd=vec2(-.14+.28*sd,.4);
+    for(int i=0;i<16;i++){
+      float fi=float(i);
+      float ti=(fi+.5)/16.*.9+.05+(h12(vec2(fi,sd*31.))-.5)*.04;
+      float k=(pr-ti)/.022;
+      if(k<0.||k>1.)continue;
+      float a=-PI*.5+(h12(vec2(fi,7.+sd))-.5)*2.6;
+      vec2 dir=vec2(cos(a),sin(a));
+      c+=streak(uv,rd+dir*(.04+.14*h12(vec2(fi,3.+sd))),dir,k,.16);
+    }
+    c+=vec3(.5,.6,1.)*exp(-length(uv-rd)*60.)*.06*fade;
+  } else {
+    vec2 sp=vec2(-.18+.12*sd,.26+.08*fract(sd*7.));
+    vec2 d=uv-sp;
+    float b=smoothstep(0.,.07,pr)*exp(-max(pr-.07,0.)*2.6);
+    vec3 col=mix(vec3(.8,.9,1.),vec3(1.,.62,.42),smoothstep(.1,.7,pr));
+    c=spikeStar(d,.35+1.1*b)*col*b*1.1;
+    float rr=.008+pr*.07;
+    c+=vec3(.6,.75,1.)*exp(-sq((length(d)-rr)/.004))*(1.-pr)*.25*smoothstep(.05,.15,pr);
+  }
+  return c;
+}
 `;
 const SCENES = {
   moon: { q: .7, ground: -0.07, shadow: 1, fs: `
@@ -92,7 +142,7 @@ float crater(vec2 q,float sc,float seed,float dens){
 float moonH(vec2 q){return fbm4(q*2.5)*.05+n2(q*14.)*.012+crater(q,.7,1.,.4)*.75+crater(q,2.2,7.,.55)*.8+crater(q,7.,3.,.6)*.7;}
 vec3 scene(vec2 uv){
   vec3 col=stars(uv)*.9;
-  vec3 L=normalize(vec3(-.9,.28,.4));
+  vec3 L=uSun.w>.5?normalize(uSun.xyz):normalize(vec3(-.9,.28,.4));
   vec2 c=vec2(.11,.15+.008*sin(uT*.05)); float R=.095;
   vec2 d=(uv-c)/R; float rr=length(d);
   float pw=1./(R*uRes.y);
@@ -100,7 +150,7 @@ vec3 scene(vec2 uv){
   col+=vec3(.12,.32,1.)*exp(-(rr-1.)*7.)*step(1.,rr)*.35*sideLit*(.8+.4*uB);
   if(rr<1.){
     vec3 n=vec3(d,sqrt(1.-rr*rr));
-    vec3 p=n; p.yz=rot(.35)*p.yz; p.xz=rot(uT*.03)*p.xz;
+    vec3 p=n; p.yz=rot(.35)*p.yz; p.xz=rot(uSun.w>.5?uMk.w:uT*.03)*p.xz;
     float land=fbm3(p*2.3+3.);
     float isL=smoothstep(.52,.545,land);
     vec3 ocean=mix(vec3(.002,.012,.05),vec3(.006,.04,.12),fbm3(p*7.));
@@ -123,6 +173,13 @@ vec3 scene(vec2 uv){
     lit+=(surf*.12+vec3(.003,.006,.016))*night*(1.-cl*.6)+vec3(.007,.009,.013)*cl*night;
     float city=smoothstep(.74,.86,n3(p*70.))*smoothstep(.7,.85,n3(p*9.)+.3)*isL*night;
     lit+=vec3(1.,.6,.25)*city*(.5+.15*sin(uR*.8+p.x*40.));
+    // 你所在的地方：一盏暖色的小灯，一圈圈向外荡开
+    if(uSun.w>.5){
+      vec3 dm=n-uMk.xyz; float md=dot(dm,dm);
+      float rg=fract(abs(uR)*.3);
+      lit+=vec3(1.,.8,.5)*(exp(-md*1800.)*2.2+exp(-md*160.)*.18*(.7+.3*sin(abs(uR)*2.)))*(.5+.8*night)*step(0.,uMk.z);
+      lit+=vec3(1.,.8,.5)*exp(-sq((sqrt(md)-rg*.14)*80.))*(1.-rg)*.3*step(0.,uMk.z);
+    }
     // 夜面云层里偶尔一闪的闪电
     float ls=floor(uR*1.7), lf=fract(uR*1.7);
     vec3 lp=normalize(vec3(h12(vec2(ls,1.))-.5,h12(vec2(ls,2.))-.5,.2+h12(vec2(ls,3.))*.4));
@@ -179,6 +236,14 @@ vec3 scene(vec2 uv){
   sky+=vec3(.16,.42,1.)*(exp(-dsun*6.5)*.9+exp(-dsun*20.)*1.6)*(.85+.3*uB);
   float ls=length(uv-sp);
   sky+=vec3(1.,1.,1.05)*(smoothstep(.0105,.0085,ls)*6.+exp(-ls*110.)*2.5);
+  // 日食：火卫一从太阳前面走过
+  if(uEv.x>3.5){
+    vec2 ec=sp+vec2(mix(-.03,.03,uEv.y),.0022);
+    float cov=smoothstep(.017,0.,length(ec-sp));
+    sky*=1.-.4*cov;
+    vec2 ed=(uv-ec)/vec2(.0085,.0068);
+    if(dot(ed,ed)<1.)sky=vec3(.01,.007,.006)+vec3(.04,.03,.025)*smoothstep(-.2,.8,-ed.x);
+  }
   float hz=fbm(vec2(uv.x*2.5-uT*.008,uv.y*16.));
   sky+=vec3(.16,.07,.03)*hz*smoothstep(.28,-.02,uv.y)*.8;
   sky+=stars(uv)*smoothstep(.12,.35,uv.y)*.55;
@@ -396,6 +461,12 @@ vec3 scene(vec2 uv){
     col=vec3(1.,.28,.08)*(1.6+1.2*gran)*(.4+.6*mu)+vec3(1.,.5,.2)*pow(mu,3.);
     vec2 fs=vec2(cos(fa),sin(fa))*.82;
     col+=vec3(1.,.8,.5)*exp(-dot(d-fs,d-fs)*30.)*flare*2.5;}
+  // 凌星：一颗行星的剪影从红矮星前面走过
+  if(uEv.x>3.5){
+    vec2 ec=sp+vec2(mix(-.08,.08,uEv.y),-.007);
+    float er=length(uv-ec);
+    if(er<.021)col=vec3(.012,.005,.005)+vec3(1.,.3,.1)*exp(-(.021-er)*900.)*.5*step(ls,sR+.003);
+  }
   float hit=0.; vec3 pc;
   float dr=sin(uT*.006)*.06;
   pc=planet(uv,vec2(-.13+dr*.3,.29),.034,vec3(sp,0.),vec3(.25,.35,.42),hit); col=mix(col,pc,hit); hit=0.;
@@ -612,11 +683,13 @@ vec3 scene(vec2 uv){
 }` },
 };
 const GLSL_MAIN = `
-uniform vec2 uShift; uniform float uZoom; uniform float uDim;
-uniform vec4 uCat; uniform float uGround; uniform float uImp;
+uniform float uDim; uniform float uGround; uniform float uImp; uniform float uHz;
+uniform vec2 uCon[12]; uniform float uConN; uniform vec4 uConBox;
 void main(){
   vec2 sp=(gl_FragCoord.xy-.5*uRes)/uRes.y;
-  vec3 c=max(scene((sp-uShift)/uZoom),0.);
+  vec2 suv=(sp-uShift)/uZoom;
+  vec3 c=max(scene(suv),0.);
+  if(uEv.x>.5&&uEv.x<3.5) c+=sightFx(sp)*(uGround>.5?smoothstep(uHz,uHz+.04,suv.y):1.);
   // 小猫和地面接触：影子、压出的浅坑、被挤起的一圈土；在太空里则是一圈柔光
   if(uCat.z>0.){
     vec2 cd=(sp-uCat.xy)/vec2(uCat.z,uCat.z*.26);
@@ -635,6 +708,28 @@ void main(){
       c+=vec3(.7,.8,1.)*exp(-sq((r-1.)*5.))*.05*(.6+.6*uB);
     }
   }
+  // 我的星座：每次潜修点亮一颗，按顺序连起来
+  if(uConN>.5){
+    vec2 bp=(sp-uConBox.xy)/uConBox.zw;
+    if(bp.x>-.4&&bp.x<1.4&&bp.y>-.4&&bp.y<1.4){
+      float px=1./(uRes.y*uConBox.w);
+      vec3 cc=vec3(0.);
+      for(int i=0;i<12;i++){
+        float fi=float(i);
+        if(fi>=uConN)break;
+        vec2 a=uCon[i], d=bp-a;
+        float tw=.75+.25*sin(abs(uR)*(1.+fi*.3)+fi*2.)+step(uConN-1.5,fi)*(.4+.4*sin(abs(uR)*2.4));
+        cc+=vec3(1.,.88,.62)*(exp(-dot(d,d)/(px*px*2.5))*1.5+exp(-dot(d,d)/(px*px*28.))*.14)*tw;
+        if(i>0){
+          vec2 b=uCon[i-1], ab=a-b;
+          float hh=clamp(dot(bp-b,ab)/max(dot(ab,ab),1e-6),0.,1.);
+          float dl=length(bp-b-ab*hh);
+          cc+=vec3(.95,.82,.6)*exp(-dl*dl/(px*px*.5))*.12*smoothstep(0.,.08,hh*length(ab))*smoothstep(0.,.08,(1.-hh)*length(ab));
+        }
+      }
+      c+=cc*(.8+.2*uB);
+    }
+  }
   c=1.-exp(-c*1.15);
   c=pow(c,vec3(.4545));
   c*=1.-.35*pow(length(sp*vec2(1.6,1.)),2.2);
@@ -645,10 +740,10 @@ void main(){
 
 // 各页面下背景的状态：速度、亮度、帧率、缩放
 const SPACE_MODES = {
-  home: { speed: 1, dim: 1, fps: 30, zoom: 0.6, gzoom: 0.7 },
-  session: { speed: 0.5, dim: 0.8, fps: 24, zoom: 0.72, gzoom: 1 },
-  done: { speed: 0.6, dim: 0.75, fps: 24, zoom: 0.65, gzoom: 0.8 },
-  page: { speed: 0.4, dim: 1, fps: 10, zoom: 0.6, gzoom: 0.7 },
+  home: { speed: 1, dim: 1, fps: 30, zoom: 0.6, gzoom: 0.7, link: 0.35 },
+  session: { speed: 0.5, dim: 0.8, fps: 24, zoom: 0.72, gzoom: 1, link: 1 },
+  done: { speed: 0.6, dim: 0.75, fps: 24, zoom: 0.65, gzoom: 0.8, link: 0.5 },
+  page: { speed: 0.4, dim: 1, fps: 10, zoom: 0.6, gzoom: 0.7, link: 0.2 },
 };
 
 // 灰尘的样子：月面在真空里沿抛物线飞、落得慢；火星有稀薄的风；太空里是一点点星尘
@@ -664,7 +759,10 @@ const Space = (() => {
   let w = 0, h = 0, dpr = 1, gdpr = 1, scale = 0, quality = 1;
   let cur = null, warp = null, last = 0, lastRaf = 0, slow = 0, running = false;
   let t = 20, rt = 3, mode = SPACE_MODES.home, dim = 1, zoom = mode.zoom, breath = null;
-  let shift = null, catEl = null, cat = [0, 0, 0, 1], imprint = 1;
+  let shift = null, catEl = null, cat = [0, 0, 0, 1], imprint = 1, link = mode.link;
+  let ev = [0, 0, 0, 0], sun = [0, 0, 0, 0], mark = [0, 0, 0, 0];
+  const con = new Float32Array(24);
+  let conN = 0;
   let progs = {};
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const VERT = 'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}';
@@ -688,7 +786,8 @@ const Space = (() => {
     const u = n => gl.getUniformLocation(p, n);
     return (progs[id] = {
       p, a: gl.getAttribLocation(p, 'a'), res: u('uRes'), t: u('uT'), r: u('uR'), b: u('uB'), shift: u('uShift'), zoom: u('uZoom'),
-      dim: u('uDim'), cat: u('uCat'), ground: u('uGround'), imp: u('uImp'),
+      dim: u('uDim'), cat: u('uCat'), ground: u('uGround'), imp: u('uImp'), hz: u('uHz'), link: u('uLink'),
+      ev: u('uEv'), sun: u('uSun'), mk: u('uMk'), con: u('uCon'), conN: u('uConN'), conBox: u('uConBox'),
     });
   }
 
@@ -721,16 +820,18 @@ const Space = (() => {
   }
 
   // 地面场景：地平线放在小猫脚后方，让小猫坐在地上；太空场景：主角放在小猫右上方，不挡住
-  function layout() {
-    const S = SCENES[cur], spot = catSpot();
-    let target;
+  function targetShift(S, spot, z) {
     if (S.ground !== undefined) {
       const horizon = spot ? spot.y + spot.height * 0.4 : 0.08;
-      target = [0, horizon - S.ground * zoom];
-    } else {
-      const hx = spot ? spot.x + 0.1 : 0.1, hy = spot ? Math.min(spot.top + 0.09, 0.37) : 0.25;
-      target = [hx - S.hero[0] * zoom, hy - S.hero[1] * zoom];
+      return [0, horizon - S.ground * z];
     }
+    const hx = spot ? spot.x + 0.1 : 0.1, hy = spot ? Math.min(spot.top + 0.09, 0.37) : 0.25;
+    return [hx - S.hero[0] * z, hy - S.hero[1] * z];
+  }
+
+  function layout() {
+    const S = SCENES[cur], spot = catSpot();
+    const target = targetShift(S, spot, zoom);
     if (!shift) shift = target;
     const k = warp ? 1 : 0.18;
     shift = [shift[0] + (target[0] - shift[0]) * k, shift[1] + (target[1] - shift[1]) * k];
@@ -744,9 +845,11 @@ const Space = (() => {
     return c < 4 ? (1 - Math.cos(c / 4 * Math.PI)) / 2 : (1 + Math.cos((c - 4) / 6 * Math.PI)) / 2;
   }
 
-  function draw(id, b) {
+  // o：生成明信片时临时换一套构图
+  function draw(id, b, o) {
     const s = gdpr * SCENES[id].q * quality;
-    if (Math.abs(s - scale) > 1e-3) { scale = s; canvas.width = Math.round(w * s); canvas.height = Math.round(h * s); }
+    if (!o && Math.abs(s - scale) > 1e-3) { scale = s; canvas.width = Math.round(w * s); canvas.height = Math.round(h * s); }
+    const v = o || { shift, zoom, cat, dim, imp: imprint };
     const P = prog(id);
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.useProgram(P.p);
@@ -757,12 +860,22 @@ const Space = (() => {
     gl.uniform1f(P.t, t);
     gl.uniform1f(P.r, reduce ? -1 : rt);
     gl.uniform1f(P.b, b);
-    gl.uniform2f(P.shift, shift[0], shift[1]);
-    gl.uniform1f(P.zoom, zoom);
-    gl.uniform1f(P.dim, dim);
-    gl.uniform4f(P.cat, cat[0], cat[1], cat[2], cat[3]);
+    gl.uniform2f(P.shift, v.shift[0], v.shift[1]);
+    gl.uniform1f(P.zoom, v.zoom);
+    gl.uniform1f(P.dim, v.dim);
+    gl.uniform4f(P.cat, v.cat[0], v.cat[1], v.cat[2], v.cat[3]);
     gl.uniform1f(P.ground, SCENES[id].ground !== undefined ? 1 : 0);
-    gl.uniform1f(P.imp, imprint);
+    gl.uniform1f(P.hz, SCENES[id].ground !== undefined ? SCENES[id].ground : -1);
+    gl.uniform1f(P.imp, v.imp);
+    gl.uniform1f(P.link, link);
+    gl.uniform4f(P.ev, ev[0], ev[1], ev[2], ev[3]);
+    gl.uniform4f(P.sun, sun[0], sun[1], sun[2], sun[3]);
+    gl.uniform4f(P.mk, mark[0], mark[1], mark[2], mark[3]);
+    // 星座放在左上角一小块
+    const aspect = canvas.width / canvas.height, box = 0.1;
+    gl.uniform4f(P.conBox, -aspect / 2 + 0.035, 0.37 - box, box, box);
+    gl.uniform2fv(P.con, con);
+    gl.uniform1f(P.conN, conN);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
@@ -782,6 +895,7 @@ const Space = (() => {
     if (!reduce) { t = (t + dt * mode.speed) % 3600; rt = (rt + dt) % 3600; }
     const k = Math.min(1, dt * 3);
     dim += (mode.dim - dim) * k;
+    link += (mode.link - link) * k;
     const zt = cur && SCENES[cur].ground !== undefined ? mode.gzoom : mode.zoom;
     zoom += (zt - zoom) * k;
     if (!w) size();
@@ -928,6 +1042,35 @@ const Space = (() => {
     // 地上被坐出的印子：0 还没坐下，1 坐实了（起身后印子保留）
     imprint(v) { imprint = v; },
     puff,
+    // 稀有天象：type 0 表示没有
+    event(type, progress, seed) { ev = [type, progress || 0, seed || 0, 0]; },
+    // 真实地球：太阳方向（决定地相）、你所在位置的方向、地球转角
+    sky(o) { sun = o ? [...o.sun, 1] : [0, 0, 0, 0]; mark = o ? [...o.mark, o.spin] : [0, 0, 0, 0]; },
+    // 我的星座：最多 12 个点，坐标在 0–1 的小方框里
+    constellation(points) {
+      con.fill(0);
+      points.slice(0, 12).forEach((p, i) => { con[i * 2] = p[0]; con[i * 2 + 1] = p[1]; });
+      conN = Math.min(12, points.length);
+    },
+    // 按明信片的构图在显卡上画一帧，拷到普通画布上返回
+    snapshot(W, H, spot) {
+      if (!running || !gl) return null;
+      const S = SCENES[cur], z = S.ground !== undefined ? SPACE_MODES.done.gzoom : SPACE_MODES.done.zoom;
+      try {
+        canvas.width = W; canvas.height = H; scale = -1;
+        draw(cur, breathNow(performance.now()), {
+          shift: targetShift(S, spot, z), zoom: z, cat: [spot.x, spot.y, spot.r, S.shadow || 1], dim: 1, imp: 1,
+        });
+        const out = document.createElement('canvas');
+        out.width = W; out.height = H;
+        out.getContext('2d').drawImage(canvas, 0, 0);
+        return out;
+      } catch (e) {
+        console.error(e);
+        return null;
+      }
+    },
+    get place() { return cur; },
     get on() { return running; },
   };
 })();
