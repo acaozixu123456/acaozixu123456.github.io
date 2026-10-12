@@ -38,7 +38,7 @@ vec3 spikeStar(vec2 d,float s){float l=length(d);
   return vec3(c);}
 `;
 const SCENES = {
-  moon: { q: .7, fs: `
+  moon: { q: .7, ground: -0.07, shadow: 1, fs: `
 float crater(vec2 q,float sc,float seed,float dens){
   vec2 g=q*sc,id=floor(g),f=fract(g);float h=0.;
   for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){
@@ -53,11 +53,11 @@ float crater(vec2 q,float sc,float seed,float dens){
   }
   return h/sc;
 }
-float moonH(vec2 q){return fbm4(q*2.5)*.05+crater(q,.7,1.,.45)*1.1+crater(q,2.2,7.,.55)*.9+crater(q,7.,3.,.6)*.7;}
+float moonH(vec2 q){return fbm4(q*2.5)*.05+n2(q*14.)*.012+crater(q,.7,1.,.4)*.75+crater(q,2.2,7.,.55)*.8+crater(q,7.,3.,.6)*.7;}
 vec3 scene(vec2 uv){
   vec3 col=stars(uv)*.9;
   vec3 L=normalize(vec3(-.9,.28,.4));
-  vec2 c=vec2(.075,.2+.01*sin(uT*.05)); float R=.105;
+  vec2 c=vec2(.11,.15+.008*sin(uT*.05)); float R=.095;
   vec2 d=(uv-c)/R; float rr=length(d);
   float pw=1./(R*uRes.y);
   float sideLit=clamp(dot(normalize(d),normalize(L.xy))*.8+.35,0.,1.);
@@ -91,7 +91,7 @@ vec3 scene(vec2 uv){
   if(uv.y<yh+py){
     float dy=max(yh-uv.y,.0012);
     float z=.5/dy;
-    vec2 q=vec2(uv.x*z,z)*3.;
+    vec2 q=vec2(uv.x*z,z)*4.;
     float e=.006+.002*z;
     float h0=moonH(q),hx=moonH(q+vec2(e,0.)),hz=moonH(q+vec2(0.,e));
     vec3 n=normalize(vec3(-(hx-h0)/e,1.,-(hz-h0)/e));
@@ -100,15 +100,15 @@ vec3 scene(vec2 uv){
     float alb=.09+.07*fbm4(q*.25+9.)+.03*n2(q*30.);
     vec3 g=vec3(1.,.96,.9)*alb*dif*3.4+.0015;
     vec3 gf=vec3(1.,.96,.9)*.13*Lg.y*3.6;
-    g=mix(g,gf,smoothstep(8.,40.,z));
+    g=mix(g,gf,smoothstep(5.,26.,z));
     col=mix(col,g,smoothstep(yh+py,yh-py,uv.y));
   }
   return col;
 }` },
 
-  mars: { q: .85, fs: `
+  mars: { q: .85, ground: -0.02, shadow: 1, fs: `
 vec3 scene(vec2 uv){
-  vec2 sp=vec2(-.12,.05+.008*sin(uT*.04));
+  vec2 sp=vec2(-.15,.06+.008*sin(uT*.04));
   vec3 sky=mix(vec3(.32,.13,.05),vec3(.012,.008,.01),smoothstep(-.04,.42,uv.y));
   sky=mix(sky,vec3(.45,.22,.09),smoothstep(.02,-.06,uv.y));
   vec2 ds=(uv-sp)*vec2(1.,1.45); float dsun=length(ds);
@@ -145,7 +145,7 @@ vec3 scene(vec2 uv){
   return col;
 }` },
 
-  saturn: { q: .9, fs: `
+  saturn: { q: .9, hero: [0, 0.17], fs: `
 float ringD(float k){
   if(k<1.24||k>2.28)return 0.;
   float d=smoothstep(1.24,1.5,k)*.28;
@@ -207,7 +207,7 @@ vec3 scene(vec2 uv){
   return col;
 }` },
 
-  orion: { q: .75, fs: `
+  orion: { q: .75, hero: [0, 0.15], fs: `
 vec3 trap(vec2 p,vec2 s,float k){return spikeStar(p-s,k)*vec3(.82,.9,1.)*(.7+.45*uB);}
 vec3 scene(vec2 uv){
   vec2 p=uv-vec2(0.,.15);
@@ -229,7 +229,7 @@ vec3 scene(vec2 uv){
   return col;
 }` },
 
-  pleiades: { q: .8, fs: `
+  pleiades: { q: .8, hero: [0, 0.17], fs: `
 vec3 st(vec2 p,vec2 s,float k,inout float g){vec2 d=p-s;g+=k*exp(-length(d)*9.);return spikeStar(d,k)*vec3(.7,.82,1.)*(.75+.4*uB);}
 vec3 scene(vec2 uv){
   vec2 p=(uv-vec2(.0,.17))*1.;
@@ -248,7 +248,7 @@ vec3 scene(vec2 uv){
   return col;
 }` },
 
-  trappist: { q: .85, fs: `
+  trappist: { q: .85, ground: -0.02, shadow: -1, fs: `
 vec3 planet(vec2 uv,vec2 c,float R,vec3 sp,vec3 base,inout float hit){
   vec2 d=(uv-c)/R; float rr=length(d);
   if(rr>1.)return vec3(0.);
@@ -261,7 +261,7 @@ vec3 planet(vec2 uv,vec2 c,float R,vec3 sp,vec3 base,inout float hit){
   return col;
 }
 vec3 scene(vec2 uv){
-  vec2 sp=vec2(.06,.045);
+  vec2 sp=vec2(.15,.08);
   vec3 col=mix(vec3(.07,.012,.008),vec3(.004,.001,.003),smoothstep(-.05,.45,uv.y));
   col+=stars(uv)*.6*smoothstep(.0,.3,uv.y);
   float ls=length(uv-sp);
@@ -290,7 +290,7 @@ vec3 scene(vec2 uv){
   return col;
 }` },
 
-  pillars: { q: .75, fs: `
+  pillars: { q: .75, hero: [0, 0.12], fs: `
 float pil(vec2 p,float x0,float top,float w0,float lean){
   float cx=x0+lean*(p.y-top);
   float w=w0*(1.+(top-p.y)*1.1);
@@ -326,7 +326,7 @@ vec3 scene(vec2 uv){
   return col;
 }` },
 
-  crab: { q: .8, fs: `
+  crab: { q: .8, hero: [0, 0.15], fs: `
 vec3 scene(vec2 uv){
   vec2 c=vec2(0.,.15);
   vec2 p=rot(.5)*(uv-c); p*=vec2(1.,1.35);
@@ -348,7 +348,7 @@ vec3 scene(vec2 uv){
   return col;
 }` },
 
-  blackhole: { q: .6, fs: `
+  blackhole: { q: .6, hero: [0, 0.15], fs: `
 vec3 bg(vec3 d){vec2 s=vec2(atan(d.x,d.z),asin(clamp(d.y,-1.,1.)));
   float mw=exp(-abs(s.y+s.x*.3-.1)*5.)*fbm(s*4.);
   return starL(s*.6,190.,.06,1.)*.35+starL(s*.6,70.,.06,2.)*.6+vec3(.12,.08,.05)*mw*.6;}
@@ -386,7 +386,7 @@ vec3 scene(vec2 uv){
   return acc;
 }` },
 
-  andromeda: { q: .8, fs: `
+  andromeda: { q: .8, hero: [0, 0.17], fs: `
 vec3 scene(vec2 uv){
   vec2 p=uv-vec2(0.,.17);
   p=rot(.62)*p;
@@ -412,7 +412,7 @@ vec3 scene(vec2 uv){
   return col;
 }` },
 
-  deepfield: { q: .8, fs: `
+  deepfield: { q: .8, hero: [0, 0.1], fs: `
 vec3 gal(vec2 p,float sc,float seed){
   vec2 g=p*sc,id=floor(g),f=fract(g)-.5;
   float h=h12(id+seed); if(h>.5)return vec3(0.);
@@ -443,7 +443,7 @@ vec3 scene(vec2 uv){
   return col;
 }` },
 
-  cmb: { q: .75, fs: `
+  cmb: { q: .75, hero: [0, 0.19], fs: `
 vec3 ramp(float f){
   vec3 c=mix(vec3(.01,.03,.22),vec3(.15,.45,1.),smoothstep(.3,.44,f));
   c=mix(c,vec3(1.,.95,.85),smoothstep(.44,.52,f));
@@ -471,10 +471,29 @@ vec3 scene(vec2 uv){
 }` },
 };
 const GLSL_MAIN = `
-uniform vec2 uShift; uniform float uDim;
+uniform vec2 uShift; uniform float uZoom; uniform float uDim;
+uniform vec4 uCat; uniform float uGround; uniform float uImp;
 void main(){
   vec2 sp=(gl_FragCoord.xy-.5*uRes)/uRes.y;
-  vec3 c=max(scene(sp-uShift),0.);
+  vec3 c=max(scene((sp-uShift)/uZoom),0.);
+  // 小猫和地面接触：影子、压出的浅坑、被挤起的一圈土；在太空里则是一圈柔光
+  if(uCat.z>0.){
+    vec2 cd=(sp-uCat.xy)/vec2(uCat.z,uCat.z*.26);
+    float r=length(cd);
+    if(uGround>.5){
+      vec2 sd=(sp-uCat.xy-vec2(uCat.z*.5*uCat.w,uCat.z*.02))/vec2(uCat.z*1.4,uCat.z*.3);
+      c*=1.-.62*exp(-dot(sd,sd)*1.6);
+      float grain=n2(sp*uRes.y*.3)*.6+n2(sp*uRes.y*.08)*.4;
+      float rim=exp(-pow((r-1.05)*3.6,2.))*uImp;
+      c*=1.+rim*(.15+.9*grain);
+      c*=1.-.35*smoothstep(1.,.55,r)*uImp;
+      float clod=step(.82,n2(sp*uRes.y*.12))*exp(-pow((r-1.35)*2.2,2.))*uImp;
+      c*=1.-clod*.35;
+    } else {
+      c+=vec3(.45,.55,1.)*exp(-r*r*1.3)*.1;
+      c+=vec3(.7,.8,1.)*exp(-pow((r-1.)*5.,2.))*.05*(.6+.6*uB);
+    }
+  }
   c=1.-exp(-c*1.15);
   c=pow(c,vec3(.4545));
   c*=1.-.35*pow(length(sp*vec2(1.6,1.)),2.2);
@@ -483,19 +502,28 @@ void main(){
   gl_FragColor=vec4(c,1.);
 }`;
 
-// 各页面下背景的状态：速度、亮度、帧率、画面上下偏移
+// 各页面下背景的状态：速度、亮度、帧率、缩放
 const SPACE_MODES = {
-  home: { speed: 1, dim: 1, fps: 30, shift: 0.06 },
-  session: { speed: 0.5, dim: 0.8, fps: 24, shift: 0.04 },
-  done: { speed: 0.6, dim: 0.75, fps: 24, shift: 0.06 },
-  page: { speed: 0.4, dim: 1, fps: 10, shift: 0.06 },
+  home: { speed: 1, dim: 1, fps: 30, zoom: 0.6, gzoom: 0.7 },
+  session: { speed: 0.5, dim: 0.8, fps: 24, zoom: 0.72, gzoom: 1 },
+  done: { speed: 0.6, dim: 0.75, fps: 24, zoom: 0.65, gzoom: 0.8 },
+  page: { speed: 0.4, dim: 1, fps: 10, zoom: 0.6, gzoom: 0.7 },
+};
+
+// 灰尘的样子：月面在真空里沿抛物线飞、落得慢；火星有稀薄的风；太空里是一点点星尘
+const DUST_STYLES = {
+  moon: { color: '196,192,184', g: 70, drag: 0, wind: 0, n: 70 },
+  mars: { color: '205,135,92', g: 140, drag: 1.2, wind: 22, n: 60 },
+  trappist: { color: '120,78,74', g: 160, drag: 0.4, wind: 0, n: 50 },
+  sky: { color: '190,210,255', g: -14, drag: 0.8, wind: 0, n: 26 },
 };
 
 const Space = (() => {
   let canvas, overlay, gl, o2, buf;
   let w = 0, h = 0, dpr = 1, scale = 0, quality = 1;
   let cur = null, warp = null, last = 0, lastRaf = 0, slow = 0, running = false;
-  let t = 20, mode = SPACE_MODES.home, dim = 1, shift = mode.shift, breath = null;
+  let t = 20, mode = SPACE_MODES.home, dim = 1, zoom = mode.zoom, breath = null;
+  let shift = null, catEl = null, cat = [0, 0, 0, 1], imprint = 1;
   let progs = {};
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const VERT = 'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}';
@@ -517,7 +545,10 @@ const Space = (() => {
     gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
     const u = n => gl.getUniformLocation(p, n);
-    return (progs[id] = { p, a: gl.getAttribLocation(p, 'a'), res: u('uRes'), t: u('uT'), b: u('uB'), shift: u('uShift'), dim: u('uDim') });
+    return (progs[id] = {
+      p, a: gl.getAttribLocation(p, 'a'), res: u('uRes'), t: u('uT'), b: u('uB'), shift: u('uShift'), zoom: u('uZoom'),
+      dim: u('uDim'), cat: u('uCat'), ground: u('uGround'), imp: u('uImp'),
+    });
   }
 
   function setupGL() {
@@ -531,6 +562,37 @@ const Space = (() => {
     dpr = Math.min(devicePixelRatio || 1, 2);
     w = innerWidth; h = innerHeight; scale = 0;
     overlay.width = Math.round(w * dpr); overlay.height = Math.round(h * dpr);
+  }
+
+  // 小猫脚底在画面里的位置（以屏幕高度为 1，中心为原点，向上为正）
+  function catSpot() {
+    if (!catEl) return null;
+    const r = catEl.getBoundingClientRect();
+    if (!r.width || !r.height) return null;
+    return {
+      x: (r.left + r.width / 2 - w / 2) / h,
+      y: (h / 2 - (r.top + r.height * 192 / 210)) / h,
+      top: (h / 2 - r.top) / h,
+      height: r.height / h,
+      r: r.width * 0.36 / h,
+    };
+  }
+
+  // 地面场景：地平线放在小猫脚后方，让小猫坐在地上；太空场景：主角放在小猫右上方，不挡住
+  function layout() {
+    const S = SCENES[cur], spot = catSpot();
+    let target;
+    if (S.ground !== undefined) {
+      const horizon = spot ? spot.y + spot.height * 0.4 : 0.08;
+      target = [0, horizon - S.ground * zoom];
+    } else {
+      const hx = spot ? spot.x + 0.1 : 0.1, hy = spot ? Math.min(spot.top + 0.09, 0.37) : 0.25;
+      target = [hx - S.hero[0] * zoom, hy - S.hero[1] * zoom];
+    }
+    if (!shift) shift = target;
+    const k = warp ? 1 : 0.18;
+    shift = [shift[0] + (target[0] - shift[0]) * k, shift[1] + (target[1] - shift[1]) * k];
+    cat = spot ? [spot.x, spot.y, spot.r, S.shadow || 1] : [0, 0, 0, 1];
   }
 
   // 4 秒吸、6 秒呼；呼吸模式下改用练习里的真实节奏
@@ -552,8 +614,12 @@ const Space = (() => {
     gl.uniform2f(P.res, canvas.width, canvas.height);
     gl.uniform1f(P.t, t);
     gl.uniform1f(P.b, b);
-    gl.uniform2f(P.shift, 0, shift);
+    gl.uniform2f(P.shift, shift[0], shift[1]);
+    gl.uniform1f(P.zoom, zoom);
     gl.uniform1f(P.dim, dim);
+    gl.uniform4f(P.cat, cat[0], cat[1], cat[2], cat[3]);
+    gl.uniform1f(P.ground, SCENES[id].ground !== undefined ? 1 : 0);
+    gl.uniform1f(P.imp, imprint);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
@@ -571,25 +637,28 @@ const Space = (() => {
     const dt = Math.min(0.2, (now - last) / 1000);
     last = now;
     if (!reduce) t = (t + dt * mode.speed) % 3600;
-    dim += (mode.dim - dim) * Math.min(1, dt * 3);
-    shift += (mode.shift - shift) * Math.min(1, dt * 3);
+    const k = Math.min(1, dt * 3);
+    dim += (mode.dim - dim) * k;
+    const zt = cur && SCENES[cur].ground !== undefined ? mode.gzoom : mode.zoom;
+    zoom += (zt - zoom) * k;
     if (!w) size();
     const b = breathNow(now);
     try {
       o2.setTransform(dpr, 0, 0, dpr, 0, 0);
       o2.clearRect(0, 0, w, h);
-      if (!warp) { draw(cur, b); return; }
+      if (!warp) { layout(); draw(cur, b); return; }
       const p = (now - warp.start) / 1300;
-      if (p >= 0.5 && cur !== warp.to) { cur = warp.to; if (warp.onMid) warp.onMid(); }
+      if (p >= 0.5 && cur !== warp.to) { cur = warp.to; layout(); if (warp.onMid) warp.onMid(); }
+      layout();
       draw(cur, b);
-      const k = p < 0.5 ? p / 0.5 : Math.max(0, 1 - (p - 0.5) / 0.5);
-      o2.fillStyle = `rgba(2,3,8,${Math.min(1, k * 1.25)})`;
+      const kk = p < 0.5 ? p / 0.5 : Math.max(0, 1 - (p - 0.5) / 0.5);
+      o2.fillStyle = `rgba(2,3,8,${Math.min(1, kk * 1.25)})`;
       o2.fillRect(0, 0, w, h);
       const cx = w / 2, cy = h * 0.32;
       o2.lineCap = 'round';
       for (const s of streaks) {
-        const r0 = (s.d * 0.4 + k * 0.3) * h, len = k * k * h * 0.35 * (0.4 + s.d);
-        o2.strokeStyle = `rgba(200,220,255,${k * (0.3 + s.d * 0.6)})`;
+        const r0 = (s.d * 0.4 + kk * 0.3) * h, len = kk * kk * h * 0.35 * (0.4 + s.d);
+        o2.strokeStyle = `rgba(200,220,255,${kk * (0.3 + s.d * 0.6)})`;
         o2.lineWidth = 0.6 + s.d;
         o2.beginPath();
         o2.moveTo(cx + Math.cos(s.a) * r0, cy + Math.sin(s.a) * r0);
@@ -606,6 +675,70 @@ const Space = (() => {
     console.error('space background off:', e);
     running = false;
     document.body.classList.remove('space-on');
+  }
+
+  /* ---------- 灰尘粒子：画在最上层的一张透明画布上 ---------- */
+
+  let dustCanvas = null, dctx = null, motes = [], dustLast = 0;
+
+  function dustFrame(now) {
+    const dt = Math.min(0.05, (now - dustLast) / 1000 || 0.016);
+    dustLast = now;
+    const W = innerWidth, H = innerHeight, d = Math.min(devicePixelRatio || 1, 2);
+    if (dustCanvas.width !== Math.round(W * d)) { dustCanvas.width = Math.round(W * d); dustCanvas.height = Math.round(H * d); }
+    dctx.setTransform(d, 0, 0, d, 0, 0);
+    dctx.clearRect(0, 0, W, H);
+    motes = motes.filter(m => m.life > 0);
+    for (const m of motes) {
+      if (!m.landed) {
+        m.vx += (m.st.wind - m.vx) * m.st.drag * dt;
+        m.vy += m.st.g * dt - m.vy * m.st.drag * dt * 0.5;
+        m.x += m.vx * dt;
+        m.y += m.vy * dt;
+        if (m.st.g > 0 && m.vy > 0 && m.y >= m.floor) { m.y = m.floor; m.landed = true; }
+      }
+      m.life -= dt * (m.landed ? 1.6 : m.fade);
+      const a = Math.max(0, Math.min(1, m.life)) * m.a;
+      dctx.fillStyle = `rgba(${m.st.color},${a})`;
+      dctx.beginPath();
+      dctx.arc(m.x, m.y, m.s, 0, 7);
+      dctx.fill();
+    }
+    if (motes.length) requestAnimationFrame(dustFrame);
+    else dctx.clearRect(0, 0, W, H);
+  }
+
+  function puff(kind) {
+    if (!running || !catEl || reduce) return;
+    const r = catEl.getBoundingClientRect();
+    if (!r.width) return;
+    if (!dustCanvas) {
+      dustCanvas = document.createElement('canvas');
+      dustCanvas.className = 'dust';
+      document.body.appendChild(dustCanvas);
+      dctx = dustCanvas.getContext('2d');
+    }
+    const ground = SCENES[cur].ground !== undefined;
+    const st = DUST_STYLES[ground ? cur : 'sky'] || DUST_STYLES.moon;
+    const fx = r.left + r.width / 2, fy = r.top + r.height * 192 / 210, half = r.width * 0.3;
+    const n = Math.round(st.n * (kind === 'stand' ? 0.6 : 1));
+    for (let i = 0; i < n; i++) {
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const x = fx + side * half * (0.4 + Math.random() * 0.75);
+      const sp = ground ? 30 + Math.random() * 90 : 6 + Math.random() * 20;
+      const ang = ground ? (0.15 + Math.random() * 0.9) : Math.random() * Math.PI;
+      motes.push({
+        x, y: fy - Math.random() * 3, st,
+        vx: ground ? side * Math.cos(ang) * sp : Math.cos(ang) * sp,
+        vy: ground ? -Math.sin(ang) * sp : -Math.abs(Math.sin(ang)) * sp,
+        floor: fy + Math.random() * 7,
+        s: 0.6 + Math.random() * (ground ? 1.7 : 1.4),
+        a: ground ? 0.35 + Math.random() * 0.5 : 0.4 + Math.random() * 0.5,
+        life: 1, fade: ground ? 0.25 : 0.45, landed: false,
+      });
+    }
+    dustLast = performance.now();
+    requestAnimationFrame(dustFrame);
   }
 
   return {
@@ -643,8 +776,15 @@ const Space = (() => {
       try { prog(id); } catch (e) { fail(e); if (onMid) onMid(); return; }
       warp = { start: performance.now(), to: id, onMid };
     },
-    mode(name) { mode = SPACE_MODES[name] || SPACE_MODES.home; },
+    mode(name, el) {
+      mode = SPACE_MODES[name] || SPACE_MODES.home;
+      catEl = el || null;
+      if (name !== 'session') imprint = 1;
+    },
     breath(b) { breath = b; },
+    // 地上被坐出的印子：0 还没坐下，1 坐实了（起身后印子保留）
+    imprint(v) { imprint = v; },
+    puff,
     get on() { return running; },
   };
 })();

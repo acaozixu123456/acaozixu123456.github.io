@@ -643,6 +643,10 @@ body.space-on[data-screen="home"]::before {
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background: linear-gradient(to bottom, transparent 34%, rgba(4, 5, 10, .62) 54%, rgba(4, 5, 10, .78));
 }
+body.space-on[data-screen="session"]::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(to bottom, transparent 55%, rgba(4, 5, 10, .45) 72%, rgba(4, 5, 10, .6));
+}
 body.space-on .screen { text-shadow: 0 1px 10px rgba(0, 0, 0, .35); }
 
 .place-tag {
@@ -696,3 +700,19 @@ body.space-on .screen { text-shadow: 0 1px 10px rgba(0, 0, 0, .35); }
 .sm-go { display: block; width: 100%; margin-top: 16px; padding: 12px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); letter-spacing: .2em; }
 .sm-go:disabled { opacity: .45; }
 @media (prefers-reduced-motion: reduce) { .sm-node.fresh .sm-orb::after { animation: none; } }
+
+/* ---------- 小猫站起和盘腿坐（--sit：0 站着，1 盘腿坐好，由脚本驱动） ---------- */
+
+.cat .legs, .cat .lotus { display: none; }
+.cat .lotus .crease { fill: none; stroke: var(--fur-dark); stroke-width: 2; stroke-linecap: round; opacity: .45; }
+.cat .lotus .pad { fill: var(--cat-pink); opacity: .75; }
+.lotus-mode .cat .legs, .lotus-mode .cat .lotus { display: inline; }
+.lotus-mode .cat .poser { transform: translateY(calc((1 - var(--sit, 1)) * -26px)); }
+.lotus-mode .cat .legs { transform-origin: 100px 200px; transform: scaleY(calc(1 - var(--sit, 1))); opacity: calc(1.6 - var(--sit, 1) * 1.6); }
+.lotus-mode .cat .lotus { transform-origin: 100px 192px; transform: scaleX(calc(.6 + var(--sit, 1) * .4)); opacity: calc((var(--sit, 1) - .5) * 2.2); }
+.lotus-mode .cat .pawpos-l { transform: translate(calc(-14px - var(--sit, 1) * 8px), calc(-20px + var(--sit, 1) * 13px)); }
+.lotus-mode .cat .pawpos-r { transform: translate(calc(14px + var(--sit, 1) * 8px), calc(-20px + var(--sit, 1) * 13px)); }
+.lotus-mode .cat .shadow { transform-origin: 100px 197px; transform: scale(calc(.75 + var(--sit, 1) * .25)); }
+
+/* 坐下、起身时扬起的灰尘 */
+.dust { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 20; }

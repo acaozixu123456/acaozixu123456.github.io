@@ -17,6 +17,11 @@ const CAT_SVG = `
     <path class="s3" d="M24 132 l2 -5 l2 5 l5 2 l-5 2 l-2 5 l-2 -5 l-5 -2 z"/>
   </g>
   <g class="hopper">
+    <g class="legs">
+      <path class="fur" d="M77 162 h15 v30 a7.5 7.5 0 0 1 -15 0 z M108 162 h15 v30 a7.5 7.5 0 0 1 -15 0 z"/>
+      <ellipse class="light" cx="84" cy="195" rx="11" ry="5.5"/><ellipse class="light" cx="116" cy="195" rx="11" ry="5.5"/>
+    </g>
+    <g class="poser">
     <g class="tail">
       <path d="M136 182 C 180 188, 196 144, 168 120"/>
       <path class="tail-tip" d="M171 124 C 175 128, 177 132, 178 136"/>
@@ -24,8 +29,15 @@ const CAT_SVG = `
     <g class="body-g">
       <path class="fur" d="M100 104 C 58 104, 45 148, 50 175 C 53 195, 147 195, 150 175 C 155 148, 142 104, 100 104 Z"/>
       <ellipse class="belly" cx="100" cy="161" rx="28" ry="25"/>
-      <g class="paw paw-l"><ellipse class="light" cx="82" cy="189" rx="14" ry="9"/><path class="toe" d="M77 192 v-4 M87 192 v-4"/></g>
-      <g class="paw paw-r"><ellipse class="light" cx="118" cy="189" rx="14" ry="9"/><path class="toe" d="M113 192 v-4 M123 192 v-4"/></g>
+      <g class="lotus">
+        <path class="fur" d="M46 186 C 44 170, 78 168, 100 179 C 122 168, 156 170, 154 186 C 152 199, 48 199, 46 186 Z"/>
+        <path class="crease" d="M64 182 C 78 178, 90 180, 100 186 C 110 180, 122 178, 136 182"/>
+        <ellipse class="light" cx="87" cy="188" rx="9.5" ry="6" transform="rotate(-18 87 188)"/>
+        <ellipse class="light" cx="113" cy="188" rx="9.5" ry="6" transform="rotate(18 113 188)"/>
+        <ellipse class="pad" cx="86" cy="188.5" rx="3.6" ry="2.6"/><ellipse class="pad" cx="114" cy="188.5" rx="3.6" ry="2.6"/>
+      </g>
+      <g class="pawpos-l"><g class="paw paw-l"><ellipse class="light" cx="82" cy="189" rx="14" ry="9"/><path class="toe" d="M77 192 v-4 M87 192 v-4"/></g></g>
+      <g class="pawpos-r"><g class="paw paw-r"><ellipse class="light" cx="118" cy="189" rx="14" ry="9"/><path class="toe" d="M113 192 v-4 M123 192 v-4"/></g></g>
     </g>
     <g class="head">
       <g class="ear ear-l"><path class="fur" d="M52 66 Q46 24 58 17 Q72 18 94 42 Z"/><path class="inner" d="M59 56 Q56 32 62 27 Q72 30 84 43 Z"/></g>
@@ -68,6 +80,7 @@ const CAT_SVG = `
         <path class="bow" d="M132 34 l-14 -10 l2 18 z M132 34 l14 -10 l-2 18 z"/>
         <circle class="bow-knot" cx="132" cy="34" r="4"/>
       </g>
+    </g>
     </g>
   </g>
   <g class="yarn">
