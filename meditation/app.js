@@ -575,11 +575,9 @@ function renderFocus(now = Date.now()) {
   if (now < focus.alertUntil) {
     el.textContent = focus.alertText;
     el.className = 'focus alert';
-  } else if (focus.count === 0) {
-    el.textContent = '心无旁骛';
-    el.className = 'focus clean';
   } else {
-    el.textContent = `分心 ${focus.count} 次`;
+    // 平时不显示文字，分心的记号留在圆环上
+    el.textContent = '';
     el.className = 'focus';
   }
 }
@@ -800,6 +798,7 @@ function finish(completed, now = Date.now()) {
     renderHome();
     return;
   }
+  renderDoneEffects(savedEntry ? log.filter(e => e.start !== timer.startedAt) : null);
   const s = stats();
   $('done-title').textContent = completed ? '完成' : '已结束';
   $('done-detail').textContent = `这次${timer.mode === 'breath' ? '呼吸练习' : ''} ${formatDuration(sec)}，已连续 ${s.streak} 天`;
@@ -861,7 +860,7 @@ function renderSession(now = Date.now()) {
     const paused = timer.phase === 'paused';
     if (breath) {
       $('phase').textContent = paused ? '已暂停' : formatClock(left);
-      $('session-hint').textContent = timer.pattern.hint;
+      $('session-hint').textContent = '';
     } else {
       $('phase').textContent = paused ? '已暂停' : '静坐';
       $('time').textContent = formatClock(left);
@@ -931,6 +930,59 @@ function renderSettings() {
   $('noise-volume').value = String(settings.noiseVolume);
 }
 
+/* ---------- 练习效果 ---------- */
+
+function renderEffects() {
+  const box = $('effects');
+  box.textContent = '';
+  for (const r of estimateEffects(log)) {
+    const row = document.createElement('div');
+    row.className = 'effect';
+    row.innerHTML = `
+      <div class="effect-head">
+        <span class="effect-name"></span>
+        <span class="effect-val"></span>
+      </div>
+      <div class="effect-desc"></div>
+      <div class="effect-bar"><i></i></div>`;
+    row.querySelector('.effect-name').textContent = r.name;
+    row.querySelector('.effect-desc').textContent = r.desc;
+    const val = row.querySelector('.effect-val');
+    val.textContent = formatPoints(r.points);
+    val.classList.toggle('zero', Math.abs(r.points) < 0.05);
+    row.querySelector('.effect-bar i').style.width = `${(r.progress * 100).toFixed(1)}%`;
+    box.append(row);
+  }
+  const src = $('effect-sources');
+  if (!src.childElementCount) {
+    for (const e of EFFECTS) {
+      const li = document.createElement('li');
+      li.textContent = `${e.name}：${e.basis}`;
+      src.append(li);
+    }
+  }
+}
+
+// 结束页：这次练习让各项估算值变化了多少
+function renderDoneEffects(before) {
+  const box = $('done-effects');
+  box.textContent = '';
+  if (!before) return;
+  const now = Date.now();
+  const a = estimateEffects(before, now);
+  const b = estimateEffects(log, now);
+  for (let i = 0; i < a.length; i++) {
+    const d = b[i].points - a[i].points;
+    const item = document.createElement('div');
+    const v = document.createElement('b');
+    v.textContent = formatPoints(d, 2);
+    const n = document.createElement('span');
+    n.textContent = a[i].name;
+    item.append(v, n);
+    box.append(item);
+  }
+}
+
 /* ---------- 统计页 ---------- */
 
 let calMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
@@ -971,6 +1023,7 @@ function renderStats(now = new Date()) {
   $('n-week').textContent = Math.floor(weekSec / 60);
   $('n-month').textContent = Math.floor(monthSec / 60);
   $('n-total').textContent = s.totalMin;
+  renderEffects();
 
   // 月历
   const y = calMonth.getFullYear();

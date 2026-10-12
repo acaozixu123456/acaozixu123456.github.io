@@ -530,3 +530,27 @@ h2 { font-size: 13px; font-weight: 400; color: var(--muted); margin: 0 0 8px; le
 @keyframes cat-doze { 0%, 100% { transform: translateY(2px) rotate(2deg); } 50% { transform: translateY(5px) rotate(3deg); } }
 @keyframes z-up { 0% { opacity: 0; translate: -8px 12px; } 30% { opacity: .9; } 100% { opacity: 0; translate: 6px -12px; } }
 .cat .hearts path, .cat .zzz text { transform-box: fill-box; transform-origin: center; }
+
+/* ---------- 练习效果 ---------- */
+
+.effect { padding: 10px 0; border-top: 1px solid var(--line); }
+.effect:first-child { border-top: none; padding-top: 2px; }
+.effect-head { display: flex; justify-content: space-between; align-items: baseline; }
+.effect-name { font-size: 15px; }
+.effect-val { font-size: 22px; font-weight: 300; color: var(--accent); font-variant-numeric: tabular-nums; }
+.effect-val.zero { color: var(--muted); }
+.effect-desc { font-size: 12px; color: var(--muted); }
+.effect-bar { height: 3px; border-radius: 2px; background: var(--line); margin-top: 8px; overflow: hidden; }
+.effect-bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; transition: width .6s ease; }
+.method { margin-top: 10px; font-size: 13px; color: var(--muted); }
+.method summary { cursor: pointer; color: var(--accent); list-style: none; padding: 6px 0; }
+.method summary::-webkit-details-marker { display: none; }
+.method p, .method li { margin: 6px 0; line-height: 1.6; }
+.method ul { padding-left: 18px; margin: 6px 0 0; }
+
+.done-effects { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; width: 100%; max-width: 340px; }
+.done-effects:empty { display: none; }
+.done-effects div { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.done-effects b { font-weight: 300; font-size: 18px; color: var(--accent); font-variant-numeric: tabular-nums; }
+.done-effects span { font-size: 11px; color: var(--muted); }
+#session .hint:empty { display: none; }
