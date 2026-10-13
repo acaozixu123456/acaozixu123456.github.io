@@ -766,7 +766,7 @@ const DUST_STYLES = {
 const Space = (() => {
   let canvas, overlay, gl, o2, buf;
   let w = 0, h = 0, dpr = 1, gdpr = 1, scale = 0, quality = 1;
-  let cur = null, warp = null, last = 0, lastRaf = 0, slow = 0, running = false, raf = 0;
+  let cur = null, warp = null, last = 0, lastRaf = 0, slow = 0, running = false, raf = 0, drawGap = 50;
   let t = 20, rt = 3, mode = SPACE_MODES.home, dim = 1, zoom = mode.zoom, breath = null;
   let shift = null, catEl = null, cat = [0, 0, 0, 1], imprint = 1, link = mode.link;
   let stirOn = false, stirV = 0, dimK = 1;
@@ -905,13 +905,14 @@ const Space = (() => {
     if (lastRaf && !document.hidden) {
       const gap = now - lastRaf;
       slow = gap > 45 && gap < 500 ? slow + 1 : Math.max(0, slow - 1);
-      if (slow > 20 && quality > 0.5) { quality *= 0.85; slow = 0; }
+      if (slow > 20 && quality > 0.5) { quality *= 0.85; slow = 0; Diag.note('gpu', `画面太卡，降低星空画质到 ${quality.toFixed(2)}（${cur}）`); }
     }
     lastRaf = now;
     // 显卡资源被收回期间不画也不编译，免得报错后整个宇宙背景被关掉
     if (document.hidden || gl.isContextLost() || now - last < 1000 / mode.fps - 4) return;
     const dt = Math.min(0.2, (now - last) / 1000);
     last = now;
+    drawGap += ((dt * 1000) - drawGap) * 0.05;
     if (!reduce) { t = (t + dt * mode.speed) % 3600; rt = (rt + dt) % 3600; }
     const k = Math.min(1, dt * 3);
     dim += (mode.dim * dimK - dim) * (dimK < 1 ? Math.min(1, dt * 0.8) : k);
@@ -952,6 +953,7 @@ const Space = (() => {
 
   function fail(e) {
     console.error('space background off:', e);
+    Diag.note('gpu', `宇宙背景出错，已关闭：${e && e.message || e}`);
     running = false;
     document.body.classList.remove('space-on');
   }
@@ -1044,9 +1046,10 @@ const Space = (() => {
         overlay.hidden = true;
         overlay.width = overlay.height = 1;
         // 显卡资源被系统收回时先露出极光背景，恢复后再切回来，不留黑屏
-        canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); document.body.classList.remove('space-on'); });
+        canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); document.body.classList.remove('space-on'); Diag.note('gpu', `显卡资源被系统收回（${cur}）`); });
         canvas.addEventListener('webglcontextrestored', () => {
           setupGL(); scale = 0;
+          Diag.note('gpu', '显卡资源已恢复');
           if (running) document.body.classList.add('space-on');
         });
         addEventListener('resize', () => { w = 0; });
@@ -1115,6 +1118,8 @@ const Space = (() => {
       }
     },
     get place() { return cur; },
+    // 运行日志用：画质、实际帧率、画布像素
+    get stats() { return running ? { q: +quality.toFixed(2), fps: Math.round(1000 / drawGap), px: canvas ? `${canvas.width}x${canvas.height}` : '' } : null; },
     get on() { return running; },
   };
 })();

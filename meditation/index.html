@@ -272,6 +272,12 @@
         <button id="test" class="text-btn">播放</button>
       </div>
     </section>
+    <section class="card">
+      <div class="row">
+        <span>运行日志<small id="diag-count">出问题时复制发给 Claude</small></span>
+        <span class="diag-btns"><button id="diag-copy" class="text-btn">复制</button><button id="diag-clear" class="text-btn muted">清空</button></span>
+      </div>
+    </section>
     <p class="hint pad">iPhone 侧面静音键打开时可能没有声音。</p>
   </main>
 
@@ -360,6 +366,7 @@
 
   <div id="toast" class="toast" hidden></div>
 
+  <script src="diag.js"></script>
   <script src="cat.js"></script>
   <script src="custom.js"></script>
   <script src="paint.js"></script>

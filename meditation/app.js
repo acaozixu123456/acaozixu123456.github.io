@@ -762,6 +762,7 @@ function startSession() {
   else startSitting(settings.prep ? 900 : 200);
   renderSession();
   timer.tickId = setInterval(tick, 250);
+  Diag.note('session', `开始${MODE_NAME[timer.mode] || '静坐'} ${settings.minutes} 分钟（${travel.here}，背景音 ${timer.sound}，提示 ${settings.cue}）`);
   if (timer.mode === 'breath') startBreathLoop();
   saveLive(now);
 }
@@ -887,6 +888,7 @@ function finish(completed, now = Date.now()) {
   clearInterval(timer.tickId);
   timer.tickId = null;
   clearLive();
+  Diag.note('session', `${completed ? '完成' : '提前结束'}，练了 ${Math.round(elapsed / 1000)} 秒`);
   if (completed) {
     if (healthy) {
       // 结束钟已在音频时钟里响起，只取消还没响的节点
@@ -1801,7 +1803,7 @@ $('open-stats').addEventListener('click', () => {
   show('stats');
 });
 $('open-wardrobe').addEventListener('click', () => { buyArmed = null; renderWardrobe(); renderWrTab(); show('wardrobe'); });
-$('open-settings').addEventListener('click', () => { renderSettings(); show('settings'); });
+$('open-settings').addEventListener('click', () => { renderSettings(); renderDiag(); show('settings'); });
 $('open-map').addEventListener('click', openStarmap);
 $('place-tag').addEventListener('click', openStarmap);
 for (const b of document.querySelectorAll('[data-back]')) {
@@ -1860,6 +1862,31 @@ $('noise-volume').addEventListener('input', e => {
 });
 $('test').addEventListener('click', () => play('bowl'));
 
+// 运行日志：复制出来发给 Claude 排查
+Diag.state = () => ({
+  screen: document.body.dataset.screen, phase: timer.phase, mode: timer.mode,
+  sec: Math.round(elapsedMs() / 1000), place: travel.here, space: Space.stats,
+  noise: noise ? noise.kind : '', audio: ctx ? ctx.state : '', nodes: document.getElementsByTagName('*').length,
+});
+function renderDiag() { $('diag-count').textContent = `已记 ${Diag.count} 条，出问题时复制发给 Claude`; }
+$('diag-copy').addEventListener('click', async () => {
+  const text = await Diag.text();
+  try { await navigator.clipboard.writeText(text); toast('日志已复制，粘贴发给 Claude 就行'); }
+  catch {
+    // 复制被拦下时，放进一个可以长按全选的文本框
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.readOnly = true; ta.className = 'diag-text';
+    $('diag-copy').closest('.card').append(ta);
+    ta.select();
+  }
+});
+let diagArmed = false;
+$('diag-clear').addEventListener('click', () => {
+  if (!diagArmed) { diagArmed = true; $('diag-clear').textContent = '再点一次'; setTimeout(() => { diagArmed = false; $('diag-clear').textContent = '清空'; }, 3000); return; }
+  diagArmed = false; $('diag-clear').textContent = '清空';
+  Diag.clear(); renderDiag();
+});
+
 $('start').addEventListener('click', startSession);
 $('pause').addEventListener('click', togglePause);
 $('stop').addEventListener('click', stopEarly);
@@ -1909,6 +1936,7 @@ matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', applyTh
 Space.sky(realSky());
 setInterval(() => Space.sky(realSky()), 30000);
 const recoveredSec = recoverLive();
+if (recoveredSec) Diag.note('session', `补记意外中断的练习 ${recoveredSec} 秒`);
 applyConstellation(log);
 
 mountCats();
