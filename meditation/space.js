@@ -766,7 +766,7 @@ const DUST_STYLES = {
 const Space = (() => {
   let canvas, overlay, gl, o2, buf;
   let w = 0, h = 0, dpr = 1, gdpr = 1, scale = 0, quality = 1;
-  let cur = null, warp = null, last = 0, lastRaf = 0, slow = 0, running = false;
+  let cur = null, warp = null, last = 0, lastRaf = 0, slow = 0, running = false, raf = 0;
   let t = 20, rt = 3, mode = SPACE_MODES.home, dim = 1, zoom = mode.zoom, breath = null;
   let shift = null, catEl = null, cat = [0, 0, 0, 1], imprint = 1, link = mode.link;
   let stirOn = false, stirV = 0, dimK = 1;
@@ -812,7 +812,14 @@ const Space = (() => {
     dpr = Math.min(devicePixelRatio || 1, 2);
     gdpr = Math.min(dpr, 1.25);
     w = innerWidth; h = innerHeight; scale = 0;
-    overlay.width = Math.round(w * dpr); overlay.height = Math.round(h * dpr);
+    if (warp) sizeOverlay(true);
+  }
+
+  // 跃迁用的那张透明画布平时缩成 1×1 并隐藏：不占内存，也不用每帧合成一张全屏图层
+  function sizeOverlay(on) {
+    const W = on ? Math.round(w * dpr) : 1, H = on ? Math.round(h * dpr) : 1;
+    if (overlay.width !== W || overlay.height !== H) { overlay.width = W; overlay.height = H; }
+    overlay.hidden = !on;
   }
 
   // 小猫脚底在画面里的位置（以屏幕高度为 1，中心为原点，向上为正）
@@ -891,8 +898,9 @@ const Space = (() => {
   }
 
   function frame(now) {
+    raf = 0;
     if (!running) return;
-    requestAnimationFrame(frame);
+    raf = requestAnimationFrame(frame);
     // 显卡跟不上时（帧间隔持续偏长）自动降低分辨率
     if (lastRaf && !document.hidden) {
       const gap = now - lastRaf;
@@ -914,9 +922,10 @@ const Space = (() => {
     if (!w) size();
     const b = breathNow(now);
     try {
+      if (!warp) { layout(); draw(cur, b); return; }
+      if (overlay.hidden) sizeOverlay(true);
       o2.setTransform(dpr, 0, 0, dpr, 0, 0);
       o2.clearRect(0, 0, w, h);
-      if (!warp) { layout(); draw(cur, b); return; }
       const p = (now - warp.start) / 1300;
       if (p >= 0.5 && cur !== warp.to) { cur = warp.to; layout(); if (warp.onMid) warp.onMid(); }
       layout();
@@ -935,7 +944,7 @@ const Space = (() => {
         o2.lineTo(cx + Math.cos(s.a) * (r0 + len), cy + Math.sin(s.a) * (r0 + len));
         o2.stroke();
       }
-      if (p >= 1) warp = null;
+      if (p >= 1) { warp = null; sizeOverlay(false); }
     } catch (e) {
       fail(e);
     }
@@ -949,9 +958,10 @@ const Space = (() => {
 
   /* ---------- 灰尘粒子：画在最上层的一张透明画布上 ---------- */
 
-  let dustCanvas = null, dctx = null, motes = [], dustLast = 0;
+  let dustCanvas = null, dctx = null, motes = [], dustLast = 0, dustRaf = 0;
 
   function dustFrame(now) {
+    dustRaf = 0;
     const dt = Math.min(0.05, (now - dustLast) / 1000 || 0.016);
     dustLast = now;
     const W = innerWidth, H = innerHeight, d = Math.min(devicePixelRatio || 1, 2);
@@ -974,8 +984,9 @@ const Space = (() => {
       dctx.arc(m.x, m.y, m.s, 0, 7);
       dctx.fill();
     }
-    if (motes.length) requestAnimationFrame(dustFrame);
-    else dctx.clearRect(0, 0, W, H);
+    // 只保留一条动画循环；灰尘落完就把画布缩成 1×1 并隐藏，释放内存
+    if (motes.length) dustRaf = requestAnimationFrame(dustFrame);
+    else { dustCanvas.width = dustCanvas.height = 1; dustCanvas.hidden = true; }
   }
 
   // kind：sit 坐下、stand 起身、step 走路时一只脚落地（side 0 左 1 右）
@@ -1009,8 +1020,11 @@ const Space = (() => {
         life: 1, fade: ground ? 0.25 : 0.45, landed: false,
       });
     }
-    dustLast = performance.now();
-    requestAnimationFrame(dustFrame);
+    if (!dustRaf) {
+      dustCanvas.hidden = false;
+      dustLast = performance.now();
+      dustRaf = requestAnimationFrame(dustFrame);
+    }
   }
 
   return {
@@ -1027,6 +1041,8 @@ const Space = (() => {
         o2 = overlay.getContext('2d');
         if (!gl) return false;
         setupGL();
+        overlay.hidden = true;
+        overlay.width = overlay.height = 1;
         // 显卡资源被系统收回时先露出极光背景，恢复后再切回来，不留黑屏
         canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); document.body.classList.remove('space-on'); });
         canvas.addEventListener('webglcontextrestored', () => {
@@ -1040,11 +1056,15 @@ const Space = (() => {
       if (!gl.isContextLost()) try { prog(id); } catch (e) { fail(e); return false; }
       running = true;
       if (!gl.isContextLost()) document.body.classList.add('space-on');
-      requestAnimationFrame(frame);
+      // 先停掉可能还在排队的旧循环，避免两条循环同时画
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(frame);
       return true;
     },
     stop() {
       running = false;
+      cancelAnimationFrame(raf);
+      raf = 0;
       document.body.classList.remove('space-on');
     },
     go(id, onMid) {
