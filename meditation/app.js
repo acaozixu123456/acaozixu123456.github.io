@@ -762,7 +762,8 @@ function startSession() {
   else startSitting(settings.prep ? 900 : 200);
   renderSession();
   timer.tickId = setInterval(tick, 250);
-  if (timer.mode === 'breath') requestAnimationFrame(animateBreath);
+  if (timer.mode === 'breath') startBreathLoop();
+  saveLive(now);
 }
 
 function beginRunning(now) {
@@ -801,6 +802,43 @@ function tick() {
   }
   if (timer.phase === 'running' && !timer.rising && timer.mode !== 'walk' && timer.plannedMs >= 60000 && timer.plannedMs - elapsedMs(now) <= STAND_MS + 1200) standUp();
   renderSession(now);
+  saveLive(now);
+}
+
+/* ---------- 页面被系统意外重启时，保住已经练了的时间 ---------- */
+// iPhone 内存紧张时会直接重新载入页面，练习中的状态就没了；每秒记一次进度，下次打开时补进记录
+
+const LIVE_KEY = 'meditation.live.v1';
+let liveSavedAt = 0;
+
+function saveLive(now = Date.now()) {
+  if (timer.phase !== 'running' && timer.phase !== 'paused') return;
+  if (now - liveSavedAt < 1000) return;
+  liveSavedAt = now;
+  const live = { start: timer.startedAt, sec: Math.round(elapsedMs(now) / 1000), planned: Math.round(timer.plannedMs / 1000), mode: timer.mode, place: travel.here };
+  if (timer.mode === 'walk' && walk.sensor) live.steps = walk.steps;
+  if (focus.on) live.distractions = focus.count;
+  try { localStorage.setItem(LIVE_KEY, JSON.stringify(live)); } catch {}
+}
+
+function clearLive() {
+  liveSavedAt = 0;
+  try { localStorage.removeItem(LIVE_KEY); } catch {}
+}
+
+// 返回补记的秒数，没有就返回 0
+function recoverLive() {
+  const live = load(LIVE_KEY, null);
+  clearLive();
+  if (!live || !live.start || !(live.sec >= MIN_SAVE_SEC) || log.some(e => e.start === live.start)) return 0;
+  const entry = { start: live.start, sec: Math.min(live.sec, live.planned || live.sec), planned: live.planned || live.sec };
+  if (live.mode && live.mode !== 'timer') entry.mode = live.mode;
+  if (live.steps) entry.steps = live.steps;
+  if (typeof live.distractions === 'number') entry.distractions = live.distractions;
+  entry.place = live.place || travel.here;
+  log.push(entry);
+  saveLog();
+  return entry.sec;
 }
 
 function togglePause() {
@@ -848,6 +886,7 @@ function finish(completed, now = Date.now()) {
   const healthy = audioClockHealthy(now);
   clearInterval(timer.tickId);
   timer.tickId = null;
+  clearLive();
   if (completed) {
     if (healthy) {
       // 结束钟已在音频时钟里响起，只取消还没响的节点
@@ -1111,7 +1150,7 @@ function renderBreath(now = Date.now()) {
   if (timer.phase === 'prep') {
     orb.style.transform = `scale(${ORB_MIN})`;
     orb.style.opacity = '0.35';
-    $('stage').style.setProperty('--b', '0');
+    $('stage-cat').style.setProperty('--b', '0');
     return;
   }
   const st = breathState(elapsedMs(now), timer.pattern);
@@ -1122,18 +1161,28 @@ function renderBreath(now = Date.now()) {
   orb.style.transform = `scale(${st.scale.toFixed(4)})`;
   const b = (st.scale - ORB_MIN) / (ORB_MAX - ORB_MIN);
   orb.style.opacity = String(0.35 + 0.4 * b);
-  $('stage').style.setProperty('--b', b.toFixed(3));
+  // 只设在小猫身上：设在整个舞台上会让里面所有元素每帧重新计算样式
+  $('stage-cat').style.setProperty('--b', b.toFixed(3));
   Space.breath(b);
   if ($('time').textContent !== st.label) $('time').textContent = st.label;
   const count = String(st.count);
   if ($('sub').textContent !== count) $('sub').textContent = count;
 }
 
-// 呼吸圆每帧更新，动画才顺滑
-function animateBreath() {
+// 呼吸圆约每秒 30 次更新：够顺滑，又不让小猫每帧都整只重画（iPhone 上太耗内存会被系统强制刷新页面）
+let breathRaf = 0, breathLast = 0;
+function animateBreath(now = 0) {
+  breathRaf = 0;
   if (timer.phase === 'idle' || timer.mode !== 'breath') return;
+  breathRaf = requestAnimationFrame(animateBreath);
+  if (document.hidden || now - breathLast < 30) return;
+  breathLast = now;
   renderBreath();
-  requestAnimationFrame(animateBreath);
+}
+function startBreathLoop() {
+  cancelAnimationFrame(breathRaf);
+  breathLast = 0;
+  breathRaf = requestAnimationFrame(animateBreath);
 }
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
@@ -1859,6 +1908,7 @@ matchMedia('(prefers-color-scheme: light)').addEventListener?.('change', applyTh
 // 月面上的地球跟现实同步：地相、昼夜、你所在的位置
 Space.sky(realSky());
 setInterval(() => Space.sky(realSky()), 30000);
+const recoveredSec = recoverLive();
 applyConstellation(log);
 
 mountCats();
@@ -1866,6 +1916,7 @@ applyWardrobe();
 setupHomeCat();
 renderHome();
 show('home');
+if (recoveredSec) toast(`页面刚才意外重启了，已帮你记下 ${formatDuration(recoveredSec)} 的练习`);
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
