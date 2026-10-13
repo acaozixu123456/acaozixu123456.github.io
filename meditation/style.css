@@ -805,6 +805,7 @@ input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border: none;
 
 .space { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -2; display: block; }
 .space-warp { z-index: -1; pointer-events: none; }
+.space-warp[hidden], .dust[hidden] { display: none; }
 body.space-on .aurora { display: none; }
 body:not(.space-on) .space { display: none; }
 /* 记录、设置、衣柜、星图页：背景压暗，文字和卡片更清楚 */
