@@ -1,5 +1,5 @@
 // 改动任何文件后把版本号加一，手机上下次打开会自动更新缓存
-const CACHE = 'meditation-v22';
+const CACHE = 'meditation-v23';
 const ASSETS = [
   './',
   'index.html',

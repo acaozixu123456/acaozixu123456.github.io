@@ -1147,35 +1147,85 @@ function renderSession(now = Date.now()) {
   renderFocus(now);
 }
 
+// 呼吸圆和小猫的起伏：每换一步只交给浏览器排一段动画，由系统合成器去播，不再每帧改样式
+// （之前每秒几十次改 transform，iPhone 会不停重新栅格化图层，练一两分钟就被系统强制刷新页面）
+const breathAnim = { step: -2, paused: false, list: [] };
+const EASE_SINE = 'cubic-bezier(0.37, 0, 0.63, 1)';
+
+function stopBreathAnims() {
+  for (const a of breathAnim.list) { try { a.cancel(); } catch {} }
+  breathAnim.list = [];
+  breathAnim.step = -2;
+  breathAnim.paused = false;
+}
+
+function orbLook(scale) {
+  const b = (scale - ORB_MIN) / (ORB_MAX - ORB_MIN);
+  return { transform: `scale(${scale.toFixed(4)})`, opacity: (0.35 + 0.4 * b).toFixed(3) };
+}
+
+function breathCatFrame(scale, part) {
+  const b = (scale - ORB_MIN) / (ORB_MAX - ORB_MIN);
+  return part === 'body'
+    ? { transform: `scale(${(1 + b * 0.06).toFixed(4)}, ${(1 + b * 0.09).toFixed(4)})` }
+    : { transform: `translateY(${(b * -7).toFixed(2)}px)` };
+}
+
+// 从当前大小平滑走到这一步结束时的大小
+function playBreathStep(st, ms) {
+  stopBreathAnims();
+  breathAnim.step = st.step;
+  const [, dur, kind] = timer.pattern.steps[st.step % timer.pattern.steps.length];
+  const into = (ms / 1000) % stepCycle(timer.pattern) - stepStart(timer.pattern, st.step);
+  const left = Math.max(50, (dur - into) * 1000);
+  const to = kind === 'in' ? ORB_MAX : kind === 'out' ? ORB_MIN : st.scale;
+  const fresh = left > dur * 1000 - 120;
+  const opts = { duration: left, easing: fresh ? EASE_SINE : 'ease-out', fill: 'forwards' };
+  const anim = (el, frames, extra) => { if (el && el.animate) breathAnim.list.push(el.animate(frames, { ...opts, ...extra })); };
+  anim($('orb'), [orbLook(st.scale), orbLook(to)]);
+  const cat = $('stage-cat');
+  // composite add：小猫被打扰时自带的歪头动画还能叠上去
+  anim(cat.querySelector('.body-g'), [breathCatFrame(st.scale, 'body'), breathCatFrame(to, 'body')]);
+  anim(cat.querySelector('.head'), [breathCatFrame(st.scale, 'head'), breathCatFrame(to, 'head')], { composite: 'add' });
+}
+
+function stepCycle(pattern) { return pattern.steps.reduce((sum, x) => sum + x[1], 0); }
+function stepStart(pattern, step) {
+  const i = step % pattern.steps.length;
+  return pattern.steps.slice(0, i).reduce((sum, x) => sum + x[1], 0);
+}
+
 function renderBreath(now = Date.now()) {
   const orb = $('orb');
   if (timer.phase === 'prep') {
+    stopBreathAnims();
     orb.style.transform = `scale(${ORB_MIN})`;
     orb.style.opacity = '0.35';
-    $('stage-cat').style.setProperty('--b', '0');
     return;
   }
-  const st = breathState(elapsedMs(now), timer.pattern);
+  const ms = elapsedMs(now);
+  const st = breathState(ms, timer.pattern);
   if (timer.phase === 'running' && st.step !== timer.lastStep) {
     timer.lastStep = st.step;
     breathCue(st);
   }
-  orb.style.transform = `scale(${st.scale.toFixed(4)})`;
-  const b = (st.scale - ORB_MIN) / (ORB_MAX - ORB_MIN);
-  orb.style.opacity = String(0.35 + 0.4 * b);
-  // 只设在小猫身上：设在整个舞台上会让里面所有元素每帧重新计算样式
-  $('stage-cat').style.setProperty('--b', b.toFixed(3));
-  Space.breath(b);
+  if (timer.phase === 'paused') {
+    if (!breathAnim.paused) { for (const a of breathAnim.list) a.pause(); breathAnim.paused = true; }
+  } else if (st.step !== breathAnim.step || breathAnim.paused) {
+    playBreathStep(st, ms);
+  }
+  // 星空跟着呼吸只是一个显卡参数，每帧传进去很便宜
+  Space.breath((st.scale - ORB_MIN) / (ORB_MAX - ORB_MIN));
   if ($('time').textContent !== st.label) $('time').textContent = st.label;
   const count = String(st.count);
   if ($('sub').textContent !== count) $('sub').textContent = count;
 }
 
-// 呼吸圆约每秒 30 次更新：够顺滑，又不让小猫每帧都整只重画（iPhone 上太耗内存会被系统强制刷新页面）
+// 每帧只算一下进度、更新星空参数和文字
 let breathRaf = 0, breathLast = 0;
 function animateBreath(now = 0) {
   breathRaf = 0;
-  if (timer.phase === 'idle' || timer.mode !== 'breath') return;
+  if (timer.phase === 'idle' || timer.mode !== 'breath') { stopBreathAnims(); return; }
   breathRaf = requestAnimationFrame(animateBreath);
   if (document.hidden || now - breathLast < 30) return;
   breathLast = now;
@@ -1183,6 +1233,7 @@ function animateBreath(now = 0) {
 }
 function startBreathLoop() {
   cancelAnimationFrame(breathRaf);
+  stopBreathAnims();
   breathLast = 0;
   breathRaf = requestAnimationFrame(animateBreath);
 }
